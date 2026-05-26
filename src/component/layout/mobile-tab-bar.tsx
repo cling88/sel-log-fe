@@ -18,7 +18,7 @@ export function MobileTabBar() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-200 bg-white md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-black/15 bg-white md:hidden">
       <ul className="flex h-14">
         {tabs.map((tab) => {
           const active = tab.match(pathname);
@@ -27,7 +27,7 @@ export function MobileTabBar() {
               <Link
                 href={tab.href}
                 className={`flex h-full items-center justify-center text-xs font-medium ${
-                  active ? "text-zinc-900" : "text-zinc-500"
+                  active ? "text-black" : "text-black/50"
                 }`}
               >
                 {tab.label}

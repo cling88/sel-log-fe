@@ -22,7 +22,7 @@ interface LedgerProductCellsProps {
 }
 
 const pickerButtonClass =
-  "w-full rounded-md border border-dashed border-zinc-300 bg-zinc-50/80 px-2 py-1.5 text-left text-sm hover:border-zinc-400 hover:bg-zinc-50";
+  "w-full rounded-md border border-dashed border-black/20 bg-white px-2 py-1.5 text-left text-sm hover:border-black hover:bg-white";
 
 export function LedgerProductCells({
   editing,
@@ -51,13 +51,13 @@ export function LedgerProductCells({
             className={cn(
               pickerButtonClass,
               "font-mono text-xs",
-              hasProduct ? "border-zinc-200 bg-white text-zinc-800" : "text-zinc-400",
+              hasProduct ? "border-black/15 bg-white text-black" : "text-black/50",
             )}
           >
             {sku || "SKU 선택"}
           </button>
         ) : (
-          <span className="font-mono text-xs text-zinc-600">{sku || "—"}</span>
+          <span className="font-mono text-xs text-black/70">{sku || "—"}</span>
         )}
       </td>
       <td className={tdClass}>
@@ -67,7 +67,7 @@ export function LedgerProductCells({
             onClick={openPicker}
             className={cn(
               pickerButtonClass,
-              hasProduct ? "border-zinc-200 bg-white text-zinc-900" : "text-zinc-400",
+              hasProduct ? "border-black/15 bg-white text-black" : "text-black/50",
             )}
           >
             {productName || `${nameLabel} 선택`}

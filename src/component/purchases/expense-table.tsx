@@ -204,7 +204,7 @@ export function ExpenseTable({
       <TableDataScroll>
         <table className="w-full min-w-[640px] border-collapse">
           <thead>
-            <tr className="border-b border-zinc-100 bg-zinc-50/80">
+            <tr className="border-b border-black/10 bg-white/80">
               <th className={thClass}>날짜</th>
               <th className={thClass}>구매처</th>
               <th className={thClass}>내용</th>

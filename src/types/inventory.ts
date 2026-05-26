@@ -16,6 +16,8 @@ export interface InventoryHistoryRow {
   date: string;
   type: InventoryEntryType;
   quantity: number;
+  /** 수동 조정 시 개당 원가 (금액 = unitCost × |quantity|) */
+  unitCost?: number;
   reason: string;
   source: InventoryEntrySource;
 }

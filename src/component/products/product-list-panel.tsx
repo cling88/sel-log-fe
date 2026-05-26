@@ -28,12 +28,12 @@ export function ProductListPanel({
   const { getCategoryLabel } = useMasterData();
 
   return (
-    <aside className="flex w-full shrink-0 flex-col border-b border-zinc-200 lg:w-[min(100%,520px)] lg:border-b-0 lg:border-r">
-      <div className="flex items-center gap-2 border-b border-zinc-100 p-3">
+    <aside className="flex w-full shrink-0 flex-col border-b border-black/15 lg:w-[min(100%,520px)] lg:border-b-0 lg:border-r">
+      <div className="flex items-center gap-2 border-b border-black/10 p-3">
         <button
           type="button"
           onClick={onRegister}
-          className="shrink-0 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800"
+          className="shrink-0 rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-black/90"
         >
           + 상품 등록
         </button>
@@ -42,13 +42,13 @@ export function ProductListPanel({
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="검색"
-          className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 px-3 text-sm outline-none focus:border-zinc-400"
+          className="h-9 min-w-0 flex-1 rounded-lg border border-black/15 px-3 text-sm outline-none focus:border-black"
         />
       </div>
 
       <div className="hidden max-h-[calc(100vh-220px)] overflow-auto lg:block">
         <table className="w-full min-w-[480px] text-left text-sm">
-          <thead className="sticky top-0 z-10 border-b border-zinc-100 bg-zinc-50 text-xs font-medium text-zinc-500">
+          <thead className="sticky top-0 z-10 border-b border-black/10 bg-white text-xs font-medium text-black/60">
             <tr>
               <th className="px-3 py-2.5 font-medium">SKU</th>
               <th className="px-3 py-2.5 font-medium">상품명</th>
@@ -65,7 +65,7 @@ export function ProductListPanel({
               <tr>
                 <td
                   colSpan={8}
-                  className="px-3 py-8 text-center text-sm text-zinc-400"
+                  className="px-3 py-8 text-center text-sm text-black/50"
                 >
                   검색 결과가 없습니다.
                 </td>
@@ -78,14 +78,14 @@ export function ProductListPanel({
                     key={product.id}
                     onClick={() => onSelect(product.id)}
                     className={cn(
-                      "cursor-pointer border-b border-zinc-50 transition-colors",
-                      active ? "bg-zinc-900 text-white" : "hover:bg-zinc-50",
+                      "cursor-pointer border-b border-black/5 transition-colors",
+                      active ? "bg-black text-white" : "hover:bg-white",
                     )}
                   >
                     <td
                       className={cn(
                         "whitespace-nowrap px-3 py-2.5 font-mono text-xs",
-                        active ? "text-zinc-300" : "text-zinc-500",
+                        active ? "text-black/40" : "text-black/60",
                       )}
                     >
                       {product.sku}
@@ -93,7 +93,7 @@ export function ProductListPanel({
                     <td
                       className={cn(
                         "max-w-[140px] truncate px-2 py-2.5 font-medium",
-                        active ? "text-white" : "text-zinc-900",
+                        active ? "text-white" : "text-black",
                       )}
                     >
                       {product.name}
@@ -101,7 +101,7 @@ export function ProductListPanel({
                     <td
                       className={cn(
                         "whitespace-nowrap px-2 py-2.5",
-                        active ? "text-zinc-300" : "text-zinc-600",
+                        active ? "text-black/40" : "text-black/70",
                       )}
                     >
                       {getCategoryLabel(product.category)}
@@ -109,7 +109,7 @@ export function ProductListPanel({
                     <td
                       className={cn(
                         "whitespace-nowrap px-2 py-2.5",
-                        active ? "text-zinc-300" : "text-zinc-600",
+                        active ? "text-black/40" : "text-black/70",
                       )}
                     >
                       {product.mainVendor || "—"}
@@ -117,7 +117,7 @@ export function ProductListPanel({
                     <td
                       className={cn(
                         "whitespace-nowrap px-2 py-2.5 text-right tabular-nums",
-                        active ? "text-white" : "text-zinc-700",
+                        active ? "text-white" : "text-black",
                       )}
                     >
                       {formatWon(product.latestCostPerUnit)}
@@ -125,7 +125,7 @@ export function ProductListPanel({
                     <td
                       className={cn(
                         "whitespace-nowrap px-2 py-2.5 text-right tabular-nums",
-                        active ? "text-white" : "text-zinc-700",
+                        active ? "text-white" : "text-black",
                       )}
                     >
                       {formatWon(product.recommendedPrice)}
@@ -133,7 +133,7 @@ export function ProductListPanel({
                     <td
                       className={cn(
                         "whitespace-nowrap px-2 py-2.5 text-right tabular-nums",
-                        active ? "text-white" : "text-zinc-700",
+                        active ? "text-white" : "text-black",
                       )}
                     >
                       {product.currentStock}개
@@ -149,8 +149,8 @@ export function ProductListPanel({
                           className={cn(
                             "rounded px-1.5 py-0.5 text-xs font-medium",
                             active
-                              ? "text-zinc-200 hover:bg-zinc-800"
-                              : "text-zinc-600 hover:bg-zinc-100",
+                              ? "text-white/70 hover:bg-black/90"
+                              : "text-black/70 hover:bg-white",
                           )}
                         >
                           수정
@@ -161,8 +161,8 @@ export function ProductListPanel({
                           className={cn(
                             "rounded px-1.5 py-0.5 text-xs font-medium",
                             active
-                              ? "text-red-300 hover:bg-zinc-800"
-                              : "text-red-600 hover:bg-red-50",
+                              ? "text-black/50 hover:bg-black/90"
+                              : "text-black hover:bg-black/5",
                           )}
                         >
                           삭제
@@ -179,7 +179,7 @@ export function ProductListPanel({
 
       <ul className="max-h-[360px] overflow-auto p-2 lg:hidden">
         {products.length === 0 ? (
-          <li className="px-3 py-8 text-center text-sm text-zinc-400">
+          <li className="px-3 py-8 text-center text-sm text-black/50">
             검색 결과가 없습니다.
           </li>
         ) : (
@@ -193,15 +193,15 @@ export function ProductListPanel({
                   className={cn(
                     "w-full rounded-lg px-3 py-2.5 text-left",
                     active
-                      ? "bg-zinc-900 text-white"
-                      : "text-zinc-700 hover:bg-zinc-50",
+                      ? "bg-black text-white"
+                      : "text-black hover:bg-white",
                   )}
                 >
                   <span className="block text-sm font-medium">{product.name}</span>
                   <span
                     className={cn(
                       "mt-0.5 block font-mono text-xs",
-                      active ? "text-zinc-300" : "text-zinc-500",
+                      active ? "text-black/40" : "text-black/60",
                     )}
                   >
                     {product.sku}
@@ -209,7 +209,7 @@ export function ProductListPanel({
                   <span
                     className={cn(
                       "mt-0.5 block text-xs",
-                      active ? "text-zinc-400" : "text-zinc-400",
+                      active ? "text-black/50" : "text-black/50",
                     )}
                   >
                     {getCategoryLabel(product.category)} · 재고{" "}

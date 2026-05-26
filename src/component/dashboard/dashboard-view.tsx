@@ -27,7 +27,7 @@ export function DashboardView() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
+        <h1 className="text-2xl font-semibold tracking-tight text-black">
           대시보드
         </h1>
         <div className="flex flex-wrap items-center gap-3">
@@ -43,13 +43,13 @@ export function DashboardView() {
       <BoardSection />
 
       <div>
-        <h2 className="mb-3 text-sm font-semibold text-zinc-700">
+        <h2 className="mb-3 text-sm font-semibold text-black">
           이번달 매입 요약
         </h2>
         <PurchasesSummaryCards />
       </div>
 
-      <div className="rounded-2xl border border-dashed border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+      <div className="rounded-2xl border border-dashed border-black/15 bg-white p-8 text-center text-sm text-black/60">
         월별 매입·매출 bar chart (연간 보기) — 퍼블 예정
       </div>
     </div>

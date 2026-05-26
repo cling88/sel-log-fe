@@ -23,7 +23,7 @@ export function MemoField({
   }
 
   return (
-    <span className="block max-w-[14rem] truncate text-zinc-600" title={value}>
+    <span className="block max-w-[14rem] truncate text-black/70" title={value}>
       {value || "-"}
     </span>
   );

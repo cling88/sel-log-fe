@@ -55,12 +55,12 @@ export function DatePickerInput({
         readOnly
         value={formatInputDate(isoValue)}
         onClick={() => setOpen((prev) => !prev)}
-        className="h-8 w-full cursor-pointer rounded-md border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-zinc-400"
+        className="h-8 w-full cursor-pointer rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-black"
         aria-label="날짜 선택"
       />
       {open ? (
         <div
-          className="absolute left-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg"
+          className="absolute left-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-black/15 bg-white shadow-lg"
           role="dialog"
           aria-label="달력"
         >

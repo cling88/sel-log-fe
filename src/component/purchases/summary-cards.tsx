@@ -18,18 +18,18 @@ export function PurchasesSummaryCards() {
       {cards.map((card) => (
         <div
           key={card.label}
-          className="rounded-2xl border border-[#e8e0d4] bg-[#f7f3ec] px-5 py-4"
+          className="rounded-2xl border border-black/15 bg-white px-5 py-4"
         >
-          <p className="text-sm text-zinc-600">{card.label}</p>
+          <p className="text-sm text-black/70">{card.label}</p>
           <p
-            className={`mt-1 font-semibold text-zinc-900 ${
+            className={`mt-1 font-semibold text-black ${
               card.highlight ? "text-2xl" : "text-xl"
             }`}
           >
             {formatWon(card.amount)}
           </p>
           {card.trend ? (
-            <p className="mt-2 text-sm font-medium text-emerald-600">
+            <p className="mt-2 text-sm font-medium text-black/70">
               ▲ {card.trend.percent}% 지난달 대비
             </p>
           ) : null}

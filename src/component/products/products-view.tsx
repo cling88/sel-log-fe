@@ -136,11 +136,11 @@ export function ProductsView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
+      <h1 className="text-2xl font-semibold tracking-tight text-black">
         상품관리
       </h1>
 
-      <div className="flex min-h-[520px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white lg:flex-row">
+      <div className="flex min-h-[520px] flex-col overflow-hidden rounded-2xl border border-black/15 bg-white lg:flex-row">
         <div
           className={
             mobileShowDetail && selected ? "hidden lg:contents" : "contents"
@@ -180,7 +180,7 @@ export function ProductsView() {
             />
           </div>
         ) : (
-          <div className="hidden flex-1 items-center justify-center p-8 text-sm text-zinc-400 lg:flex">
+          <div className="hidden flex-1 items-center justify-center p-8 text-sm text-black/50 lg:flex">
             상품을 선택하거나 등록해 주세요.
           </div>
         )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { ManagedSelectField } from "@/component/common/managed-select-field";
 import { suggestNextSkuCode } from "@/lib/category";
 import { cn } from "@/lib/utils";
@@ -90,8 +91,6 @@ export function ProductPickerModal({
     }
   }, [open, defaultCategoryId, vendors]);
 
-  if (!open) return null;
-
   const handleSelect = (product: Product) => {
     onSelect(product);
     setQuery("");
@@ -108,7 +107,9 @@ export function ProductPickerModal({
     handleSelect(created);
   };
 
-  return (
+  if (!open || typeof document === "undefined") return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 p-4"
       onClick={onClose}
@@ -121,42 +122,42 @@ export function ProductPickerModal({
         aria-modal="true"
         aria-labelledby="product-picker-title"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-zinc-100 px-5 py-4">
+        <div className="flex items-start justify-between gap-3 border-b border-black/10 px-5 py-4">
           <div>
             <h2
               id="product-picker-title"
-              className="text-base font-semibold text-zinc-900"
+              className="text-base font-semibold text-black"
             >
               {title}
             </h2>
-            <p className="mt-0.5 text-xs text-zinc-500">
+            <p className="mt-0.5 text-xs text-black/60">
               SKU와 상품명을 확인한 뒤 선택하세요
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+            className="rounded-md p-1 text-black/50 hover:bg-white hover:text-black"
             aria-label="닫기"
           >
             ✕
           </button>
         </div>
 
-        <div className="border-b border-zinc-100 px-5 py-3">
+        <div className="border-b border-black/10 px-5 py-3">
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="SKU · 상품명 · 구매처 검색"
             autoFocus
-            className="h-9 w-full rounded-lg border border-zinc-200 px-3 text-sm outline-none focus:border-zinc-400"
+            className="h-9 w-full rounded-lg border border-black/15 px-3 text-sm outline-none focus:border-black"
           />
         </div>
 
         <ul className="min-h-0 flex-1 overflow-auto px-3 py-2">
           {filtered.length === 0 ? (
-            <li className="px-2 py-8 text-center text-sm text-zinc-400">
+            <li className="px-2 py-8 text-center text-sm text-black/50">
               검색 결과가 없습니다
             </li>
           ) : (
@@ -170,30 +171,37 @@ export function ProductPickerModal({
                     className={cn(
                       "mb-1 w-full rounded-xl border px-4 py-3 text-left transition-colors",
                       active
-                        ? "border-zinc-900 bg-zinc-900 text-white"
-                        : "border-zinc-100 hover:border-zinc-200 hover:bg-zinc-50",
+                        ? "border-black bg-black text-white"
+                        : "border-black/10 hover:border-black/15 hover:bg-white",
                     )}
                   >
                     <p
                       className={cn(
-                        "font-mono text-sm font-semibold tracking-wide",
-                        active ? "text-white" : "text-zinc-800",
+                        "text-sm font-medium",
+                        active ? "text-white" : "text-black",
                       )}
                     >
-                      {product.sku}
-                    </p>
-                    <p
-                      className={cn(
-                        "mt-1 text-sm font-medium",
-                        active ? "text-zinc-100" : "text-zinc-900",
-                      )}
-                    >
-                      {product.name}
+                      <span className="font-mono font-semibold tracking-wide">
+                        {product.sku}
+                      </span>
+                      <span className={active ? "text-white/70" : "text-black/50"}>
+                        {" "}
+                        {product.name}
+                      </span>
+                      <span
+                        className={cn(
+                          "ml-1",
+                          active ? "text-white/60" : "text-black/40",
+                        )}
+                        aria-hidden
+                      >
+                        →
+                      </span>
                     </p>
                     <p
                       className={cn(
                         "mt-1 text-xs",
-                        active ? "text-zinc-400" : "text-zinc-500",
+                        active ? "text-white/60" : "text-black/60",
                       )}
                     >
                       {getCategoryLabel(product.category)}
@@ -208,16 +216,16 @@ export function ProductPickerModal({
           )}
         </ul>
 
-        <div className="border-t border-zinc-100 px-5 py-4">
+        <div className="border-t border-black/10 px-5 py-4">
           {showAddForm ? (
-            <div className="space-y-3 rounded-xl border border-zinc-100 bg-zinc-50 p-3">
-              <p className="text-sm font-medium text-zinc-800">새 상품 추가</p>
+            <div className="space-y-3 rounded-xl border border-black/10 bg-white p-3">
+              <p className="text-sm font-medium text-black">새 상품 추가</p>
               <label className="block text-sm">
-                <span className="text-zinc-600">상품명</span>
+                <span className="text-black/70">상품명</span>
                 <input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="mt-1 h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm"
+                  className="mt-1 h-9 w-full rounded-md border border-black/15 bg-white px-2 text-sm"
                 />
               </label>
               <ManagedSelectField
@@ -264,7 +272,7 @@ export function ProductPickerModal({
                 <button
                   type="button"
                   onClick={() => setShowAddForm(false)}
-                  className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-200"
+                  className="rounded-md px-3 py-1.5 text-sm text-black/70 hover:bg-black/10"
                 >
                   취소
                 </button>
@@ -272,7 +280,7 @@ export function ProductPickerModal({
                   type="button"
                   onClick={handleAdd}
                   disabled={!newName.trim()}
-                  className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm text-white hover:bg-zinc-800 disabled:opacity-40"
+                  className="rounded-md bg-black px-3 py-1.5 text-sm text-white hover:bg-black/90 disabled:opacity-40"
                 >
                   저장 후 선택
                 </button>
@@ -287,19 +295,19 @@ export function ProductPickerModal({
                     setNewName(query.trim());
                     setShowAddForm(true);
                   }}
-                  className="text-sm font-medium text-blue-600 hover:underline"
+                  className="text-sm font-medium text-black hover:underline"
                 >
                   + &quot;{query.trim()}&quot; 새 상품으로 추가
                 </button>
               ) : (
-                <span className="text-xs text-zinc-400">
+                <span className="text-xs text-black/50">
                   목록에서 SKU·상품명을 눌러 선택
                 </span>
               )}
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-50"
+                className="rounded-lg border border-black/15 px-3 py-1.5 text-sm text-black hover:bg-white"
               >
                 닫기
               </button>
@@ -307,6 +315,7 @@ export function ProductPickerModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

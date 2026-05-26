@@ -103,11 +103,11 @@ export function ProductModal({
         onSubmit={handleSubmit}
       >
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-base font-semibold text-zinc-900">{title}</h3>
+          <h3 className="text-base font-semibold text-black">{title}</h3>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+            className="rounded-md p-1 text-black/50 hover:bg-white hover:text-black"
             aria-label="닫기"
           >
             ✕
@@ -115,27 +115,27 @@ export function ProductModal({
         </div>
 
         <div className="mt-4 space-y-4 text-sm">
-          <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
-            <span className="text-xs text-zinc-500">SKU</span>
-            <p className="mt-0.5 font-mono text-sm font-medium text-zinc-800">
+          <div className="rounded-lg border border-black/10 bg-white px-3 py-2">
+            <span className="text-xs text-black/60">SKU</span>
+            <p className="mt-0.5 font-mono text-sm font-medium text-black">
               {previewSku ?? "—"}
             </p>
             {mode === "create" ? (
-              <p className="mt-1 text-xs text-zinc-400">
+              <p className="mt-1 text-xs text-black/50">
                 카테고리별 순번 자동 부여 (코드 {skuCode})
               </p>
             ) : (
-              <p className="mt-1 text-xs text-zinc-400">등록 후 변경할 수 없습니다</p>
+              <p className="mt-1 text-xs text-black/50">등록 후 변경할 수 없습니다</p>
             )}
           </div>
 
           <label className="block">
-            <span className="text-zinc-600">상품명</span>
+            <span className="text-black/70">상품명</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="mt-1 h-9 w-full rounded-md border border-zinc-200 px-2 outline-none focus:border-zinc-400"
+              className="mt-1 h-9 w-full rounded-md border border-black/15 px-2 outline-none focus:border-black"
             />
           </label>
 
@@ -184,11 +184,11 @@ export function ProductModal({
           />
 
           <label className="block">
-            <span className="text-zinc-600">메모</span>
+            <span className="text-black/70">메모</span>
             <input
               value={memo}
               onChange={(e) => setMemo(e.target.value)}
-              className="mt-1 h-9 w-full rounded-md border border-zinc-200 px-2 outline-none focus:border-zinc-400"
+              className="mt-1 h-9 w-full rounded-md border border-black/15 px-2 outline-none focus:border-black"
             />
           </label>
         </div>
@@ -197,13 +197,13 @@ export function ProductModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+            className="rounded-md px-3 py-1.5 text-sm text-black/70 hover:bg-white"
           >
             취소
           </button>
           <button
             type="submit"
-            className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm text-white hover:bg-zinc-800"
+            className="rounded-md bg-black px-3 py-1.5 text-sm text-white hover:bg-black/90"
           >
             저장
           </button>

@@ -8,10 +8,14 @@ export interface PurchaseRow {
   vendor: string;
   name: string;
   quantity: number;
+  /** 최종 결제금액 (입력) */
+  totalPayment: number;
+  /** 부가세 (입력·기록용) */
+  vat: number | null;
+  /** 개당 단가 — totalPayment ÷ quantity 로 자동 계산 */
   unitPrice: number;
   shippingFee: number | null;
   discount: number | null;
-  totalPayment: number;
   costPerUnit: number;
   recommendedPrice: number;
 }

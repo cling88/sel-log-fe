@@ -18,7 +18,7 @@ export function LedgerTabs({
   onChange: (tab: LedgerTabType) => void;
 }) {
   return (
-    <div className="flex gap-2 rounded-xl border border-zinc-200 bg-white p-1">
+    <div className="flex gap-2 rounded-xl border border-black/15 bg-white p-1">
       {tabs.map((tab) => {
         const active = tab.id === activeTab;
         return (
@@ -29,8 +29,8 @@ export function LedgerTabs({
             className={cn(
               "flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors",
               active
-                ? "bg-zinc-900 text-white"
-                : "text-zinc-600 hover:bg-zinc-50",
+                ? "bg-black text-white"
+                : "text-black/70 hover:bg-white",
             )}
           >
             {tab.label}

@@ -1,4 +1,4 @@
-import type { SaleChannel } from "@/types/sale";
+import type { SaleChannelId } from "@/types/sale-channel";
 
 export type SaleOrderLineType = "product" | "shipping" | "coupon";
 
@@ -34,7 +34,7 @@ export type SaleOrderLine =
 export interface SaleOrder {
   id: string;
   date: string;
-  channel: SaleChannel;
+  channel: SaleChannelId;
   orderNo?: string;
   lines: SaleOrderLine[];
   memo?: string;

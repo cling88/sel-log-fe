@@ -1,13 +1,16 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
+import type { SaleChannelFilter } from "@/component/ledger/sale-channel-tabs";
 import { formatDisplayDate } from "@/lib/date";
-import { INITIAL_SALE_ORDERS } from "@/lib/pub-seed";
 import { summarizeSaleOrder } from "@/lib/sale-order-calc";
 import { cn, formatAmount } from "@/lib/utils";
 import type { Product } from "@/types/product";
+import {
+  getSaleChannelLabel,
+  type SaleChannelItem,
+} from "@/types/sale-channel";
 import type { SaleOrder, SaleProductLine } from "@/types/sale-order";
-import { SALE_CHANNEL_LABEL } from "@/types/sale";
 
 interface SaleTabProps {
   products: Product[];
@@ -16,6 +19,10 @@ interface SaleTabProps {
     category: string;
     mainVendor?: string;
   }) => Product;
+  orders: SaleOrder[];
+  onOrdersChange: (orders: SaleOrder[]) => void;
+  channels: SaleChannelItem[];
+  channelFilter: SaleChannelFilter;
 }
 
 function SearchIcon() {
@@ -39,7 +46,7 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
       viewBox="0 0 24 24"
       fill="none"
       className={cn(
-        "shrink-0 text-zinc-500 transition-transform",
+        "shrink-0 text-black/50 transition-transform",
         expanded && "rotate-90",
       )}
       aria-hidden
@@ -70,10 +77,10 @@ function SaleOrderDetail({
   const coupon = order.lines.find((l) => l.lineType === "coupon");
 
   return (
-    <div className="border-t border-zinc-200 bg-zinc-100 px-4 py-4">
+    <div className="border-t border-black/15 bg-white px-4 py-4">
       <table className="w-full min-w-[640px] border-collapse bg-transparent text-sm">
         <thead>
-          <tr className="text-left text-xs font-medium text-zinc-500">
+          <tr className="text-left text-xs font-medium text-black/60">
             <th className="px-3 pb-2 pt-3 pr-3 font-medium">SKU</th>
             <th className="pb-2 pr-3 pt-3 font-medium">상품명</th>
             <th className="pb-2 pr-3 pt-3 text-right font-medium">판매가</th>
@@ -81,40 +88,40 @@ function SaleOrderDetail({
             <th className="px-3 pb-2 pt-3 text-right font-medium">수량</th>
           </tr>
         </thead>
-        <tbody className="text-zinc-800">
+        <tbody className="text-black">
           {productLines.map((line) => (
-            <tr key={line.id} className="border-b border-zinc-100/80">
-              <td className="px-3 py-2 pr-3 font-mono text-xs text-zinc-600">
+            <tr key={line.id} className="border-b border-black/10">
+              <td className="px-3 py-2 pr-3 font-mono text-xs text-black/70">
                 {line.sku}
               </td>
               <td className="py-2 pr-3">{line.productName}</td>
               <td className="py-2 pr-3 text-right tabular-nums">
                 {formatAmount(line.salePrice)}
               </td>
-              <td className="py-2 pr-3 text-right tabular-nums text-zinc-500">
+              <td className="py-2 pr-3 text-right tabular-nums text-black/60">
                 {formatAmount(line.vat)}
               </td>
               <td className="px-3 py-2 text-right tabular-nums">{line.quantity}</td>
             </tr>
           ))}
           {shipping && shipping.lineType === "shipping" ? (
-            <tr className="border-b border-zinc-100/80 text-zinc-700">
-              <td className="px-3 py-2 pr-3 font-mono text-xs text-zinc-600">
+            <tr className="border-b border-black/10 text-black">
+              <td className="px-3 py-2 pr-3 font-mono text-xs text-black/70">
                 &nbsp;
               </td>
               <td className="py-2 pr-3">배송비</td>
               <td className="py-2 pr-3 text-right tabular-nums">
                 {formatAmount(shipping.amount)}
               </td>
-              <td className="py-2 pr-3 text-right tabular-nums text-zinc-500">
+              <td className="py-2 pr-3 text-right tabular-nums text-black/60">
                 {shipping.vat != null ? formatAmount(shipping.vat) : "—"}
               </td>
               <td className="px-3 py-2 text-right">—</td>
             </tr>
           ) : null}
           {coupon && coupon.lineType === "coupon" ? (
-            <tr className="border-b border-zinc-100/80 text-red-600">
-              <td className="px-3 py-2 pr-3 font-mono text-xs text-zinc-600">
+            <tr className="border-b border-black/10 text-black">
+              <td className="px-3 py-2 pr-3 font-mono text-xs text-black/70">
                 &nbsp;
               </td>
               <td className="py-2 pr-3">쿠폰적용</td>
@@ -128,66 +135,67 @@ function SaleOrderDetail({
         </tbody>
       </table>
 
-      <div className="mt-4 space-y-2 border-t border-zinc-300/80 pt-3">
-        <p className="flex flex-wrap items-center justify-end gap-x-1.5 gap-y-1 text-right text-sm tabular-nums">
-          <span className="text-zinc-500">
+      <div className="mt-4 space-y-2 border-t border-black/15 pt-3">
+        <p className="flex flex-wrap items-center justify-end gap-x-1.5 gap-y-1 text-right text-sm tabular-nums text-black/70">
+          <span>
             총 결제{" "}
-            <span className="font-semibold text-zinc-900">
+            <span className="font-semibold text-black">
               {formatAmount(summary.totalPaid)}원
             </span>
           </span>
-          <span className="text-zinc-400">−</span>
-          <span className="text-zinc-500">
-            부가 {formatAmount(summary.totalVat)}원
-          </span>
-          <span className="text-zinc-400">−</span>
-          <span className="text-zinc-500">
-            수수료 {formatAmount(summary.platformFee)}원
-          </span>
-          <span className="text-zinc-400">−</span>
-          <span className="text-zinc-500">
-            원가 {formatAmount(summary.totalCogs)}원
-          </span>
-          <span className="text-zinc-400">=</span>
-          <span className="font-semibold text-emerald-700">
+          <span className="text-black/40">−</span>
+          <span>부가 {formatAmount(summary.totalVat)}원</span>
+          <span className="text-black/40">−</span>
+          <span>수수료 {formatAmount(summary.platformFee)}원</span>
+          <span className="text-black/40">−</span>
+          <span>원가 {formatAmount(summary.totalCogs)}원</span>
+          <span className="text-black/40">=</span>
+          <span className="font-semibold text-black">
             순수익 {formatAmount(summary.netProfit)}원
           </span>
         </p>
-        <p className="flex flex-wrap items-center justify-end gap-x-1.5 gap-y-1 text-right text-sm tabular-nums">
-          <span className="text-zinc-500">
-            순수익 {formatAmount(summary.netProfit)}원
-          </span>
-          <span className="text-zinc-400">−</span>
-          <span className="text-zinc-500">
-            소득세(대략 3%) {formatAmount(summary.incomeTaxReserve)}원
-          </span>
-          <span className="text-zinc-400">=</span>
-          <span className="font-semibold text-zinc-900">
+        <p className="flex flex-wrap items-center justify-end gap-x-1.5 gap-y-1 text-right text-sm tabular-nums text-black/70">
+          <span>순수익 {formatAmount(summary.netProfit)}원</span>
+          <span className="text-black/40">−</span>
+          <span>소득세(대략 3%) {formatAmount(summary.incomeTaxReserve)}원</span>
+          <span className="text-black/40">=</span>
+          <span className="font-semibold text-black">
             최종 {formatAmount(summary.finalAfterTaxReserve)}원
           </span>
         </p>
       </div>
 
       {order.memo ? (
-        <p className="mt-2 text-right text-xs text-zinc-500">메모: {order.memo}</p>
+        <p className="mt-2 text-right text-xs text-black/60">메모: {order.memo}</p>
       ) : null}
     </div>
   );
 }
 
-export function SaleTab({ products }: SaleTabProps) {
-  const [orders] = useState<SaleOrder[]>(INITIAL_SALE_ORDERS);
+export function SaleTab({
+  products,
+  orders,
+  onOrdersChange: _onOrdersChange,
+  channels,
+  channelFilter,
+}: SaleTabProps) {
+  void _onOrdersChange;
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(
-    INITIAL_SALE_ORDERS[0]?.id ?? null,
+    orders[0]?.id ?? null,
   );
+
+  const channelFiltered = useMemo(() => {
+    if (channelFilter === "all") return orders;
+    return orders.filter((order) => order.channel === channelFilter);
+  }, [orders, channelFilter]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return orders;
-    return orders.filter((order) => {
+    if (!q) return channelFiltered;
+    return channelFiltered.filter((order) => {
       if (order.orderNo?.toLowerCase().includes(q)) return true;
-      if (SALE_CHANNEL_LABEL[order.channel].includes(q)) return true;
+      if (getSaleChannelLabel(channels, order.channel).includes(q)) return true;
       if (order.date.includes(q)) return true;
       return order.lines.some(
         (line) =>
@@ -196,7 +204,7 @@ export function SaleTab({ products }: SaleTabProps) {
             line.sku.toLowerCase().includes(q)),
       );
     });
-  }, [orders, search]);
+  }, [channelFiltered, search, channels]);
 
   const listTotal = useMemo(
     () =>
@@ -208,15 +216,15 @@ export function SaleTab({ products }: SaleTabProps) {
   );
 
   const thClass =
-    "whitespace-nowrap px-3 py-2.5 text-left text-xs font-medium text-zinc-500";
+    "whitespace-nowrap px-3 py-2.5 text-left text-xs font-medium text-black/60";
   const tdClass = "whitespace-nowrap px-3 py-3 text-sm";
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white">
-      <div className="flex flex-col gap-3 border-b border-zinc-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="rounded-2xl border border-black/15 bg-white">
+      <div className="flex flex-col gap-3 border-b border-black/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <label className="relative max-w-xs flex-1">
           <span className="sr-only">검색</span>
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/40">
             <SearchIcon />
           </span>
           <input
@@ -224,12 +232,12 @@ export function SaleTab({ products }: SaleTabProps) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="검색"
-            className="h-10 w-full rounded-xl border border-zinc-200 bg-zinc-50 pl-10 pr-3 text-sm outline-none focus:border-zinc-300 focus:bg-white"
+            className="h-10 w-full rounded-xl border border-black/15 bg-white pl-10 pr-3 text-sm outline-none focus:border-black"
           />
         </label>
-        <p className="text-sm font-medium text-zinc-700">
+        <p className="text-sm font-medium text-black/80">
           결제 합계{" "}
-          <span className="font-semibold text-zinc-900">
+          <span className="font-semibold text-black">
             {listTotal.toLocaleString("ko-KR")}원
           </span>
         </p>
@@ -238,7 +246,7 @@ export function SaleTab({ products }: SaleTabProps) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px] border-collapse">
           <thead>
-            <tr className="border-b border-zinc-100 bg-zinc-50/80">
+            <tr className="border-b border-black/10 bg-white">
               <th className={`${thClass} w-10`} aria-label="펼치기" />
               <th className={thClass}>날짜</th>
               <th className={thClass}>채널</th>
@@ -253,7 +261,7 @@ export function SaleTab({ products }: SaleTabProps) {
               <tr>
                 <td
                   colSpan={7}
-                  className="px-3 py-12 text-center text-sm text-zinc-400"
+                  className="px-3 py-12 text-center text-sm text-black/50"
                 >
                   검색 결과가 없습니다
                 </td>
@@ -267,8 +275,8 @@ export function SaleTab({ products }: SaleTabProps) {
                   <Fragment key={order.id}>
                     <tr
                       className={cn(
-                        "cursor-pointer border-b border-zinc-50 transition-colors hover:bg-zinc-50/80",
-                        expanded && "bg-zinc-50/50",
+                        "cursor-pointer border-b border-black/5 transition-colors hover:bg-black/[0.03]",
+                        expanded && "bg-black/[0.02]",
                       )}
                       onClick={() =>
                         setExpandedId(expanded ? null : order.id)
@@ -280,13 +288,13 @@ export function SaleTab({ products }: SaleTabProps) {
                       <td className={`${tdClass} tabular-nums`}>
                         {formatDisplayDate(order.date)}
                         {order.orderNo ? (
-                          <span className="mt-0.5 block font-mono text-xs text-zinc-400">
+                          <span className="mt-0.5 block font-mono text-xs text-black/50">
                             {order.orderNo}
                           </span>
                         ) : null}
                       </td>
                       <td className={tdClass}>
-                        {SALE_CHANNEL_LABEL[order.channel]}
+                        {getSaleChannelLabel(channels, order.channel)}
                       </td>
                       <td
                         className={`${tdClass} text-right tabular-nums font-medium`}
@@ -294,12 +302,12 @@ export function SaleTab({ products }: SaleTabProps) {
                         {formatAmount(summary.totalPaid)}원
                       </td>
                       <td
-                        className={`${tdClass} text-right tabular-nums text-zinc-500`}
+                        className={`${tdClass} text-right tabular-nums text-black/60`}
                       >
                         {formatAmount(summary.totalOut)}원
                       </td>
                       <td
-                        className={`${tdClass} text-right tabular-nums font-medium text-emerald-700`}
+                        className={`${tdClass} text-right tabular-nums font-medium text-black`}
                       >
                         {formatAmount(summary.netProfit)}원
                       </td>
@@ -308,7 +316,7 @@ export function SaleTab({ products }: SaleTabProps) {
                       </td>
                     </tr>
                     {expanded ? (
-                      <tr className="bg-zinc-100">
+                      <tr className="bg-white">
                         <td colSpan={7} className="p-0">
                           <SaleOrderDetail order={order} products={products} />
                         </td>
@@ -322,8 +330,12 @@ export function SaleTab({ products }: SaleTabProps) {
         </table>
       </div>
 
-      <p className="border-t border-zinc-100 px-4 py-2 text-xs text-zinc-500">
-        {filtered.length}건 주문 · 행을 클릭하면 상세 내역이 펼쳐집니다
+      <p className="border-t border-black/10 px-4 py-2 text-xs text-black/60">
+        {filtered.length}건 주문
+        {channelFilter !== "all"
+          ? ` · ${getSaleChannelLabel(channels, channelFilter)}`
+          : null}
+        {" · "}행을 클릭하면 상세 내역이 펼쳐집니다
       </p>
     </div>
   );

@@ -5,7 +5,12 @@ import type {
   ProductHistoryEntry,
   ProductHistoryKind,
 } from "@/types/product-history";
+import type { SaleChannelItem } from "@/types/sale-channel";
 import type { SaleOrder } from "@/types/sale-order";
+
+export const INITIAL_SALE_CHANNELS: SaleChannelItem[] = [
+  { id: "naver", label: "네이버" },
+];
 
 export const INITIAL_CATEGORIES: ProductCategoryItem[] = [
   { id: "goods", label: "소품/완구", skuCode: "G" },
@@ -361,7 +366,8 @@ export const INITIAL_INVENTORY_HISTORY: InventoryHistoryRow[] = [
     date: "2026-05-20",
     type: "manual",
     quantity: 2,
-    reason: "불량 반품 입고",
+    unitCost: 1650,
+    reason: "샘플 출고 후 재입고",
     source: "manual",
   },
   {
@@ -370,7 +376,8 @@ export const INITIAL_INVENTORY_HISTORY: InventoryHistoryRow[] = [
     date: "2026-05-21",
     type: "manual",
     quantity: -1,
-    reason: "파손 폐기",
+    unitCost: 1650,
+    reason: "매입분 샘플 차감",
     source: "manual",
   },
 ];

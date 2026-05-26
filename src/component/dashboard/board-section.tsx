@@ -8,8 +8,8 @@ function BoardRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-[#e8e0d4] bg-[#f7f3ec] p-4">
-      <p className="text-sm font-medium text-zinc-600">{title}</p>
+    <div className="rounded-2xl border border-black/15 bg-white p-4">
+      <p className="text-sm font-medium text-black/70">{title}</p>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">{children}</div>
     </div>
   );
@@ -25,10 +25,10 @@ function Metric({
   sub?: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/60 bg-white/70 px-4 py-3">
-      <p className="text-xs text-zinc-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-zinc-900">{value}</p>
-      {sub ? <p className="mt-1 text-xs font-medium text-emerald-600">{sub}</p> : null}
+    <div className="rounded-xl border border-black/15 bg-white px-4 py-3">
+      <p className="text-xs text-black/60">{label}</p>
+      <p className="mt-1 text-lg font-semibold text-black">{value}</p>
+      {sub ? <p className="mt-1 text-xs font-medium text-black/70">{sub}</p> : null}
     </div>
   );
 }

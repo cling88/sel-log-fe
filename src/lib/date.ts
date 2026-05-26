@@ -27,12 +27,22 @@ export function parseToDate(value: string, year = new Date().getFullYear()): Dat
   return new Date();
 }
 
+/** 표시용 — 예: 2026년 05월 22일 */
 export function formatDisplayDate(value: string): string {
   if (!value) return "";
   if (ISO_DATE_RE.test(value)) {
-    const [, m, d] = value.split("-");
-    return `${m}-${d}`;
+    const [y, m, d] = value.split("-");
+    return `${y}년 ${m}월 ${d}일`;
   }
+
+  const short = value.match(/^(\d{1,2})-(\d{1,2})$/);
+  if (short) {
+    const year = new Date().getFullYear();
+    const m = String(Number(short[1])).padStart(2, "0");
+    const d = String(Number(short[2])).padStart(2, "0");
+    return `${year}년 ${m}월 ${d}일`;
+  }
+
   return value;
 }
 

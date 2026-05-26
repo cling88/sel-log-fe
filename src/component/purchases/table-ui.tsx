@@ -14,11 +14,11 @@ export function TablePanel({
   itemCount: number;
 }) {
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white">
-      <div className="flex flex-col gap-3 border-b border-zinc-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="rounded-2xl border border-black/15 bg-white">
+      <div className="flex flex-col gap-3 border-b border-black/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <label className="relative max-w-xs flex-1">
           <span className="sr-only">검색</span>
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-black/50">
             <SearchIcon />
           </span>
           <input
@@ -26,40 +26,32 @@ export function TablePanel({
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="검색"
-            className="h-10 w-full rounded-xl border border-zinc-200 bg-zinc-50 pl-10 pr-3 text-sm outline-none focus:border-zinc-300 focus:bg-white"
+            className="h-10 w-full rounded-xl border border-black/15 bg-white pl-10 pr-3 text-sm outline-none focus:border-black"
           />
         </label>
-        <p className="text-sm font-medium text-zinc-700">
+        <p className="text-sm font-medium text-black">
           합계{" "}
-          <span className="font-semibold text-zinc-900">
-            {totalAmount.toLocaleString("ko-KR")}원
-          </span>
+          <span className="font-semibold">{totalAmount.toLocaleString("ko-KR")}원</span>
         </p>
       </div>
-      <div className="flex items-stretch border-t border-zinc-100">
-        {children}
-      </div>
-      <p className="border-t border-zinc-100 px-4 py-2 text-xs text-zinc-500">
+      <div className="flex items-stretch border-t border-black/10">{children}</div>
+      <p className="border-t border-black/10 px-4 py-2 text-xs text-black/60">
         {itemCount}개 항목
       </p>
     </div>
   );
 }
 
-/** 테이블 왼쪽 + 전용 열 (데이터 테이블과 분리) */
 export function TableInsertGutter({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex w-11 shrink-0 flex-col border-r border-zinc-200 bg-zinc-50/90">
+    <div className="flex w-11 shrink-0 flex-col border-r border-black/15 bg-white">
       {children}
     </div>
   );
 }
 
-/** 데이터 테이블 스크롤 영역 */
 export function TableDataScroll({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-w-0 flex-1 overflow-x-auto">{children}</div>
-  );
+  return <div className="min-w-0 flex-1 overflow-x-auto">{children}</div>;
 }
 
 export function InlineInput({
@@ -82,7 +74,7 @@ export function InlineInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       className={cn(
-        "h-8 w-full min-w-[4rem] rounded-md border border-zinc-200 bg-white px-2 text-sm outline-none focus:border-zinc-400",
+        "h-8 w-full min-w-[4rem] rounded-md border border-black/15 bg-white px-2 text-sm outline-none focus:border-black",
         className,
       )}
     />
@@ -106,11 +98,10 @@ export function DraftRowActions({
   );
 }
 
-export const dataRowClass =
-  "group/row border-b border-zinc-50 hover:bg-zinc-50/50";
+export const dataRowClass = "group/row border-b border-black/5 hover:bg-black/[0.03]";
 
 export function GutterHeaderSpacer() {
-  return <div className="h-[42px] shrink-0 border-b border-zinc-200/80" />;
+  return <div className="h-[42px] shrink-0 border-b border-black/15" />;
 }
 
 export function GutterRowSlot({
@@ -133,7 +124,7 @@ export function GutterRowSlot({
     <div
       {...rowHoverHandlers}
       className={cn(
-        "flex min-h-[41px] items-center justify-center border-b border-zinc-100/80 py-2",
+        "flex min-h-[41px] items-center justify-center border-b border-black/10 py-2",
         className,
       )}
     >
@@ -157,11 +148,11 @@ export function RowInsertButton({
       onClick={onInsert}
       aria-label="아래에 행 추가"
       className={cn(
-        "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-zinc-300 bg-white text-base leading-none text-zinc-700 shadow-sm transition-opacity",
+        "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-black bg-white text-base leading-none text-black transition-opacity",
         visible
           ? "pointer-events-auto opacity-100"
           : "pointer-events-none opacity-0",
-        "hover:border-zinc-400 hover:bg-zinc-50",
+        "hover:bg-black hover:text-white",
         "focus:pointer-events-auto focus:opacity-100",
       )}
     >
@@ -212,9 +203,9 @@ function ActionButton({
       onClick={onClick}
       className={cn(
         "rounded-md px-2 py-1 text-xs font-medium",
-        variant === "primary" && "bg-zinc-900 text-white hover:bg-zinc-800",
-        variant === "danger" && "text-red-600 hover:bg-red-50",
-        variant === "default" && "text-zinc-600 hover:bg-zinc-100",
+        variant === "primary" && "bg-black text-white hover:bg-black/90",
+        variant === "danger" && "text-black hover:bg-black/5",
+        variant === "default" && "text-black/70 hover:bg-black/5",
       )}
     >
       {children}
@@ -239,8 +230,8 @@ function SearchIcon() {
 export const tableClass = "w-full border-collapse";
 
 export const thClass =
-  "px-3 py-2.5 text-left text-xs font-medium text-zinc-500 whitespace-nowrap";
-export const tdClass = "px-3 py-2 text-sm text-zinc-900 whitespace-nowrap";
-export const draftRowClass = "border-b border-zinc-100 bg-amber-50/40";
+  "px-3 py-2.5 text-left text-xs font-medium text-black/60 whitespace-nowrap";
+export const tdClass = "px-3 py-2 text-sm text-black whitespace-nowrap";
+export const draftRowClass = "border-b border-black/10 bg-white";
 export const registerRowClass =
-  "border-t-2 border-dashed border-zinc-200 bg-zinc-50/60";
+  "border-t-2 border-dashed border-black/20 bg-white";

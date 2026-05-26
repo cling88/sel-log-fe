@@ -22,7 +22,7 @@ export function PurchaseTabs({
   onChange,
 }: PurchaseTabsProps) {
   return (
-    <div className="flex gap-6 border-b border-zinc-200">
+    <div className="flex gap-6 border-b border-black/15">
       {tabs.map((tab) => {
         const active = tab.id === activeTab;
         return (
@@ -32,7 +32,7 @@ export function PurchaseTabs({
             onClick={() => onChange(tab.id)}
             className={cn(
               "relative flex items-center gap-2 pb-3 text-sm font-medium transition-colors",
-              active ? "text-zinc-900" : "text-zinc-500 hover:text-zinc-700",
+              active ? "text-black" : "text-black/60 hover:text-black",
             )}
           >
             {tab.label}
@@ -45,7 +45,7 @@ export function PurchaseTabs({
               {tab.count}
             </span>
             {active ? (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-zinc-900" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-black" />
             ) : null}
           </button>
         );

@@ -35,15 +35,15 @@ export function createEmptyProduct(): PurchaseRow {
     vendor: "",
     name: "",
     quantity: 1,
-    unitPrice: 0,
+    totalPayment: 0,
+    vat: null as number | null,
     shippingFee: null as number | null,
     discount: null as number | null,
+    unitPrice: 0,
   };
   const calc = calcPurchase({
     quantity: base.quantity,
-    unitPrice: base.unitPrice,
-    shippingFee: 0,
-    discount: 0,
+    totalPayment: base.totalPayment,
   });
   return { ...base, ...calc };
 }

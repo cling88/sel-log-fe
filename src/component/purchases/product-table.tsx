@@ -49,9 +49,7 @@ interface ProductTableProps {
 function applyCalc(row: PurchaseRow): PurchaseRow {
   const result = calcPurchase({
     quantity: row.quantity,
-    unitPrice: row.unitPrice,
-    shippingFee: row.shippingFee ?? 0,
-    discount: row.discount ?? 0,
+    totalPayment: row.totalPayment,
   });
   return { ...row, ...result };
 }
@@ -127,60 +125,41 @@ function ProductRowContent({
         {editing ? (
           <InlineInput
             type="number"
-            value={String(data.unitPrice)}
-            onChange={(v) => onChange({ unitPrice: Number(v) || 0 })}
+            value={String(data.totalPayment)}
+            onChange={(v) => onChange({ totalPayment: Number(v) || 0 })}
+            className="ml-auto max-w-[7rem] text-right"
+          />
+        ) : (
+          <span className="font-medium">{formatAmount(data.totalPayment)}</span>
+        )}
+      </td>
+      <td className={`${tdClass} text-right tabular-nums`}>
+        {editing ? (
+          <InlineInput
+            type="number"
+            value={data.vat != null ? String(data.vat) : ""}
+            onChange={(v) =>
+              onChange({
+                vat: v === "" ? null : Number(v) || 0,
+              })
+            }
             className="ml-auto max-w-[6rem] text-right"
           />
         ) : (
-          formatAmount(data.unitPrice)
+          displayDash(data.vat)
         )}
       </td>
-      <td className={`${tdClass} text-right tabular-nums`}>
-        {editing ? (
-          <InlineInput
-            type="number"
-            value={data.shippingFee != null ? String(data.shippingFee) : ""}
-            onChange={(v) =>
-              onChange({
-                shippingFee: v === "" ? null : Number(v) || 0,
-              })
-            }
-            className="ml-auto max-w-[5rem] text-right"
-          />
-        ) : (
-          displayDash(data.shippingFee)
-        )}
-      </td>
-      <td className={`${tdClass} text-right tabular-nums`}>
-        {editing ? (
-          <InlineInput
-            type="number"
-            value={data.discount != null ? String(data.discount) : ""}
-            onChange={(v) =>
-              onChange({
-                discount: v === "" ? null : Number(v) || 0,
-              })
-            }
-            className="ml-auto max-w-[5rem] text-right"
-          />
-        ) : (
-          displayDash(data.discount)
-        )}
-      </td>
-      <td className={`${tdClass} text-right tabular-nums font-medium`}>
-        {formatAmount(data.totalPayment)}
-      </td>
-      <td className={`${tdClass} text-right tabular-nums text-zinc-500`}>
-        {formatAmount(data.costPerUnit)}
+      <td className={`${tdClass} text-right tabular-nums text-black/70`}>
+        {data.quantity > 0 ? formatAmount(data.costPerUnit) : "—"}
       </td>
       <td className={`${tdClass} text-right tabular-nums font-medium`}>
         <div className="flex items-center justify-end gap-1.5">
           {markupPercent != null ? (
-            <span className="text-xs font-medium text-zinc-500">
+            <span className="text-xs font-medium text-black/50">
               +{markupPercent}%
             </span>
           ) : null}
-          <span className="inline-block rounded-md bg-[#e8f5d6] px-2 py-0.5">
+          <span className="inline-block rounded-md border border-black px-2 py-0.5">
             {formatAmount(data.recommendedPrice)}
           </span>
         </div>
@@ -306,17 +285,15 @@ export function ProductTable({
       <TableDataScroll>
         <table className="min-w-[1180px] w-full border-collapse">
           <thead>
-            <tr className="border-b border-zinc-100 bg-zinc-50/80">
+            <tr className="border-b border-black/10 bg-white">
               <th className={thClass}>날짜</th>
               <th className={thClass}>구매처</th>
               <th className={thClass}>SKU</th>
               <th className={thClass}>상품명</th>
               <th className={`${thClass} text-right`}>수량</th>
-              <th className={`${thClass} text-right`}>단가</th>
-              <th className={`${thClass} text-right`}>배송비</th>
-              <th className={`${thClass} text-right`}>할인</th>
-              <th className={`${thClass} text-right`}>실결제액</th>
-              <th className={`${thClass} text-right`}>개당 원가</th>
+              <th className={`${thClass} text-right`}>최종 결제금액</th>
+              <th className={`${thClass} text-right`}>부가세</th>
+              <th className={`${thClass} text-right`}>개당 단가</th>
               <th className={`${thClass} text-right`}>권장 판매가</th>
               <th className={`${thClass} text-right`}>액션</th>
             </tr>

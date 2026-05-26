@@ -45,7 +45,7 @@ export function ProductSidePanel({
         <button
           type="button"
           onClick={onBack}
-          className="mb-3 flex items-center gap-1 text-sm font-medium text-zinc-600 hover:text-zinc-900 lg:hidden"
+          className="mb-3 flex items-center gap-1 text-sm font-medium text-black/70 hover:text-black lg:hidden"
         >
           ← 목록으로
         </button>
@@ -53,28 +53,28 @@ export function ProductSidePanel({
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">{product.name}</h2>
-          <p className="mt-1 font-mono text-sm text-zinc-600">{product.sku}</p>
-          <p className="mt-1 text-sm text-zinc-500">
+          <h2 className="text-lg font-semibold text-black">{product.name}</h2>
+          <p className="mt-1 font-mono text-sm text-black/70">{product.sku}</p>
+          <p className="mt-1 text-sm text-black/60">
             {getCategoryLabel(product.category)} · 주 구매처{" "}
             {product.mainVendor || "—"}
           </p>
           {product.memo ? (
-            <p className="mt-1 text-sm text-zinc-400">{product.memo}</p>
+            <p className="mt-1 text-sm text-black/50">{product.memo}</p>
           ) : null}
         </div>
         <div className="flex gap-2">
           <button
             type="button"
             onClick={onEdit}
-            className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+            className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium text-black hover:bg-white"
           >
             수정
           </button>
           <button
             type="button"
             onClick={onDelete}
-            className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+            className="rounded-lg border border-black/20 px-3 py-1.5 text-sm font-medium text-black hover:bg-black/5"
           >
             삭제
           </button>
@@ -82,36 +82,36 @@ export function ProductSidePanel({
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4">
-          <p className="text-xs text-zinc-500">현재 재고</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums text-zinc-900">
+        <div className="rounded-xl border border-black/10 bg-white p-4">
+          <p className="text-xs text-black/60">현재 재고</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-black">
             {product.currentStock}개
           </p>
         </div>
-        <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4">
-          <p className="text-xs text-zinc-500">개당 원가</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums text-zinc-900">
+        <div className="rounded-xl border border-black/10 bg-white p-4">
+          <p className="text-xs text-black/60">개당 원가</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-black">
             {formatWon(product.latestCostPerUnit)}
           </p>
         </div>
-        <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4">
-          <p className="text-xs text-zinc-500">권장 판매가</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums text-zinc-900">
+        <div className="rounded-xl border border-black/10 bg-white p-4">
+          <p className="text-xs text-black/60">권장 판매가</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-black">
             {formatWon(product.recommendedPrice)}
           </p>
         </div>
       </div>
 
       <div className="mt-6 flex min-h-0 flex-1 flex-col">
-        <div className="flex gap-4 border-b border-zinc-200 text-sm font-medium">
+        <div className="flex gap-4 border-b border-black/15 text-sm font-medium">
           <button
             type="button"
             onClick={() => setHistoryTab("purchase")}
             className={cn(
               "pb-2 transition-colors",
               historyTab === "purchase"
-                ? "border-b-2 border-zinc-900 text-zinc-900"
-                : "text-zinc-400 hover:text-zinc-600",
+                ? "border-b-2 border-black text-black"
+                : "text-black/50 hover:text-black/70",
             )}
           >
             매입 이력
@@ -122,8 +122,8 @@ export function ProductSidePanel({
             className={cn(
               "pb-2 transition-colors",
               historyTab === "sale"
-                ? "border-b-2 border-zinc-900 text-zinc-900"
-                : "text-zinc-400 hover:text-zinc-600",
+                ? "border-b-2 border-black text-black"
+                : "text-black/50 hover:text-black/70",
             )}
           >
             매출 이력
@@ -131,20 +131,20 @@ export function ProductSidePanel({
         </div>
 
         {rows.length === 0 ? (
-          <p className="mt-4 text-sm text-zinc-400">
+          <p className="mt-4 text-sm text-black/50">
             {historyTab === "purchase" ? "매입" : "매출"} 이력이 없습니다.
           </p>
         ) : (
-          <ul className="mt-3 divide-y divide-zinc-100">
+          <ul className="mt-3 divide-y divide-black/10">
             {rows.map((row) => (
               <li
                 key={row.id}
-                className="flex items-center justify-between py-2.5 text-sm text-zinc-700"
+                className="flex items-center justify-between py-2.5 text-sm text-black"
               >
-                <span className="tabular-nums text-zinc-500">
+                <span className="tabular-nums text-black/60">
                   {formatDisplayDate(row.date)}
                   {row.sku ? (
-                    <span className="ml-2 font-mono text-xs text-zinc-400">
+                    <span className="ml-2 font-mono text-xs text-black/50">
                       {row.sku}
                     </span>
                   ) : null}
@@ -159,7 +159,7 @@ export function ProductSidePanel({
 
         <Link
           href={`/ledger?tab=${ledgerTab}&product=${product.id}`}
-          className="mt-4 inline-block text-sm font-medium text-zinc-700 hover:underline"
+          className="mt-4 inline-block text-sm font-medium text-black hover:underline"
         >
           → 전체 보기 (장부로 이동)
         </Link>

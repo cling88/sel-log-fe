@@ -1,10 +1,6 @@
-export type SaleChannel = "naver" | "coupang" | "other";
+import type { SaleChannelId } from "@/types/sale-channel";
 
-export const SALE_CHANNEL_LABEL: Record<SaleChannel, string> = {
-  naver: "네이버",
-  coupang: "쿠팡",
-  other: "기타",
-};
+export type SaleChannel = SaleChannelId;
 
 export interface SaleRow {
   id: string;

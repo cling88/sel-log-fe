@@ -21,18 +21,18 @@ export function PeriodSelector({
         type="button"
         onClick={onPrev}
         aria-label="이전 달"
-        className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-black/15 bg-white text-black/70 hover:bg-white"
       >
         ‹
       </button>
-      <span className="min-w-[120px] text-center text-base font-semibold text-zinc-900">
+      <span className="min-w-[120px] text-center text-base font-semibold text-black">
         {label}
       </span>
       <button
         type="button"
         onClick={onNext}
         aria-label="다음 달"
-        className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-black/15 bg-white text-black/70 hover:bg-white"
       >
         ›
       </button>

@@ -11,9 +11,14 @@ export interface CalcInput {
 export interface CalcResult {
   totalPayment: number;
   costPerUnit: number;
+  unitPrice: number;
   recommendedPrice: number;
 }
 
+/**
+ * @param input.totalPayment — 최종 결제금액을 직접 넣으면 수량으로 개당 원가 역산
+ * @param input.unitPrice — totalPayment 없을 때 단가×수량+배송-할인 방식 (레거시)
+ */
 export function calcPurchase(input: CalcInput): CalcResult {
   const {
     quantity,
@@ -25,17 +30,22 @@ export function calcPurchase(input: CalcInput): CalcResult {
   } = input;
 
   const totalPayment =
-    input.totalPayment ?? (unitPrice! * quantity + shippingFee - discount);
+    input.totalPayment != null
+      ? input.totalPayment
+      : (unitPrice ?? 0) * quantity + shippingFee - discount;
 
   const costPerUnit = quantity > 0 ? totalPayment / quantity : 0;
   const deductionRate = marginRate + channelFeeRate;
   const recommendedPrice =
     deductionRate < 1 ? costPerUnit / (1 - deductionRate) : 0;
 
+  const roundedCost = Math.round(costPerUnit);
+
   return {
     totalPayment: Math.round(totalPayment),
-    costPerUnit: Math.round(costPerUnit),
+    costPerUnit: roundedCost,
     recommendedPrice: Math.round(recommendedPrice),
+    unitPrice: roundedCost,
   };
 }
 
