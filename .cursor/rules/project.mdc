@@ -1,0 +1,20 @@
+---
+alwaysApply: true
+---
+
+## Code Writing Principles
+
+Before defining new components, utility functions, or types, always check if existing shared code can be reused.
+
+If a request is better handled on the backend, do not modify any code yet — instead, suggest to me that it would be better to handle it on the backend first, and wait for my confirmation.
+
+## Project Structure
+
+hooks/
+- Contains reusable logic wrapped as React hooks for components
+- Wraps data fetching and mutations with useQuery and useMutation for direct UI consumption
+- e.g. use-posts, use-categories
+
+lib/
+- Common utilities, storage, and environment logic independent of UI
+- e.g. lib/i18n/*(i18n), lib/auth-atoms.ts(Jotai state), lib/storage.tsx, lib/utils.ts
