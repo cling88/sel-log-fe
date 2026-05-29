@@ -1,9 +1,7 @@
-import { AuthLayout } from "@/component/layout/auth-layout";
-
-export default function AuthGroupLayout({
+export default function AuthLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
-  return <AuthLayout>{children}</AuthLayout>;
+}) {
+  return <>{children}</>;
 }

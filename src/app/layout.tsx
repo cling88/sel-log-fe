@@ -1,20 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import "@fontsource/dm-sans/400.css";
+import "@fontsource/dm-sans/500.css";
+import "@fontsource/dm-sans/600.css";
+import "@fontsource/dm-sans/700.css";
+import { Providers } from "@/app/providers";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "sel-log",
-  description: "매입 장부 · 수익 계산",
+  title: "Sellog",
+  description: "셀러를 위한 스마트한 장부",
 };
 
 export default function RootLayout({
@@ -23,11 +17,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="ko"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="ko">
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
