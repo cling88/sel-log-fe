@@ -406,5 +406,69 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 ---
 
+## 투두리스트 (작업 진행 체크)
+
+> 완료 시 `- [x]`, 미완료 시 `- [ ]` 로 갱신합니다. (`service-guide.md` 본문 구현은 별도 섹션)
+
+### 0. 환경·초기화
+
+- [x] 기존 `src` 퍼블 코드 초기화 후 새 구조로 재시작
+- [x] `UI-guide.md` 디렉토리 구조 (`src/components`, `src/app`, `src/lib`, `src/types`)
+- [ ] `.env.local` 작성 (`NEXT_PUBLIC_API_URL`, Supabase 키 등)
+- [ ] `lib/auth-atoms.ts` (Jotai 로그인 상태)
+
+### 1. 패키지·디자인 시스템
+
+- [x] npm: framer-motion, jotai, `@tanstack/react-query`, `@tanstack/react-table`
+- [x] npm: recharts, date-fns, axios, `@supabase/supabase-js`, exceljs
+- [x] npm: `@fontsource/dm-sans`, lucide-react
+- [x] shadcn/ui `init` + `components.json`
+- [x] shadcn 컴포넌트: button, input, label, select, dialog, badge, card, tabs, sheet, tooltip, dropdown-menu, separator, skeleton
+- [x] `globals.css` Sellog CSS Variables + shadcn 변수 병합
+- [x] `app/providers.tsx` — Jotai + React Query + TooltipProvider
+- [x] `app/layout.tsx` — DM Sans + Pretendard
+- [ ] `components/common/loading-skeleton.tsx`
+
+### 2. Cursor 작업 지시 순서 (퍼블 1차)
+
+- [x] **1.** `globals.css` 디자인 시스템 세팅
+- [x] **2.** `(main)/layout.tsx` — GNB(PC) + 하단 탭바(모바일)
+- [ ] **2.** `(main)/layout.tsx` — 미로그인 시 `/login` 리다이렉트
+- [x] **3.** `/login` — 좌측 남색 패널 + 우측 로그인 폼 (모바일: 폼만)
+- [ ] **3.** `/login` — shadcn Input/Button, 에러 배너, 실제 인증 연동
+- [x] **4.** `/dashboard` — 빈 화면 + "대시보드 준비 중입니다."
+- [x] **5.** `/ledger` — 추이 섹션 + 월선택 + 탭(매입/매출/수익/상품관리) 껍데기
+- [x] **5.** `/ledger` — 탭별 empty state (`?tab=purchase|sale|income|products`)
+- [ ] **5.** `/ledger` — 추이 토글(전체/올해/이번달/주간/오늘) 동작
+- [ ] **5.** `/ledger` — 기간 select(년/월/주) + 요약 카드 실데이터
+- [ ] **5.** `/ledger` — 이전기간 대비 ▲▼ (전체 탭 제외)
+
+### 3. 레이아웃·공통
+
+- [x] GNB: 대시보드 / 장부 / 설정
+- [x] 모바일 하단 탭바
+- [x] `/` → `/dashboard` 리다이렉트
+- [x] 장부 URL 탭: `?tab=purchase|sale|income|products`
+- [x] 상품관리 탭 시 월선택 영역 숨김 (UI만, 동작 확인)
+- [ ] 목록 UI: `table` 대신 `div` 기반 (탭 본문부터 적용)
+- [ ] shadcn 컴포넌트로 로그인·장부 헤더 리팩터 (현재 커스텀 div 위주)
+
+### 4. 장부 탭 본문 (`service-guide.md` 연동)
+
+- [ ] **매입** — 그룹 목록, 카드 라인, 그룹 하단 요약·액션, 재고반영 모달
+- [ ] **매입** — 엑셀 업로드/다운로드, 페이지네이션
+- [ ] **매출** — 채널 탭·관리, 주문 목록/토글, 등록 모달, 상태(취소/반품/교환)
+- [ ] **수익** — 입금 목록, 등록/수정 모달, 엑셀 다운로드
+- [ ] **상품관리** — 좌우 패널, SKU 자동생성, 채널 SKU, 재고 이력
+
+### 5. API·상태 (추후)
+
+- [ ] axios API 클라이언트 + React Query 훅
+- [ ] Supabase 인증/DB 연동
+- [ ] Framer Motion — 화면 전환·모달 애니메이션
+- [ ] Recharts — 대시보드·장부 차트
+
+---
+
 *퍼블 가이드 v1 — 로그인/대시보드(빈화면)/장부 기본 구조*
 *최종 수정: 2026-05-29*
