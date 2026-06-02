@@ -37,6 +37,10 @@ export function LedgerHeader() {
   const showMonthPicker = activeTab !== "products";
 
   const setTab = (tab: LedgerTabId) => {
+    if (tab === "purchase") {
+      router.replace("/ledger?tab=purchase&purchaseSub=product");
+      return;
+    }
     router.replace(`/ledger?tab=${tab}`);
   };
 

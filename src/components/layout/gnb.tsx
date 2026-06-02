@@ -15,7 +15,7 @@ export function Gnb() {
 
   return (
     <header className="sticky top-0 z-50 hidden border-b border-[var(--color-border-dark)] bg-[var(--primary-900)] md:block">
-      <div className="mx-auto flex h-[60px] max-w-[1280px] items-center justify-between px-4 lg:px-8">
+      <div className="mx-auto flex h-[60px] max-w-[1400px] items-center justify-between px-4 lg:px-8">
         <Link
           href="/dashboard"
           className="text-lg font-semibold text-[var(--color-text-inverse)]"
