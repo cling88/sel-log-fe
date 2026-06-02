@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MODAL_DIALOG_FOOTER_CLASS } from "@/components/common/modal-footer-classes";
 import { formatAmount } from "@/lib/purchase-product-calc";
 import { cn } from "@/lib/utils";
 import { Minus, Plus } from "lucide-react";
@@ -174,7 +175,7 @@ export function LedgerStockReflectDialog({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 border-t border-[var(--color-border)] px-5 py-[0.6rem] sm:justify-end">
+        <DialogFooter className={MODAL_DIALOG_FOOTER_CLASS}>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             취소
           </Button>

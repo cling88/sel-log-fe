@@ -20,60 +20,60 @@ export function PurchaseListToolbar({
   registerLabel,
   onRegister,
 }: PurchaseListToolbarProps) {
-  const showActions = showExcelActions || (registerLabel && onRegister);
-
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] px-4 py-3 shadow-[var(--shadow-sm)] sm:flex-row sm:items-center sm:gap-3">
+    <div className="flex flex-col gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] px-4 py-3 shadow-[var(--shadow-sm)] sm:flex-row sm:items-center sm:justify-between sm:gap-3">
       <Input
         type="search"
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
         placeholder={searchPlaceholder}
-        className="h-9 min-w-0 flex-1 border-[var(--color-border)] bg-white shadow-none sm:max-w-md"
+        className="h-9 min-w-0 w-full border-[var(--color-border)] bg-white shadow-none sm:max-w-md sm:flex-none"
       />
-      {showActions ? (
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {showExcelActions ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled
-                title="퍼블"
-                className="h-8 border-[var(--color-border)] bg-white text-xs shadow-none"
-              >
-                샘플다운로드
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled
-                title="퍼블"
-                className="h-8 border-[var(--color-border)] bg-white text-xs shadow-none"
-              >
-                엑셀업로드
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled
-                title="퍼블"
-                className="h-8 border-[var(--color-border)] bg-white text-xs shadow-none"
-              >
-                엑셀다운로드
-              </Button>
-            </>
-          ) : null}
-          {registerLabel && onRegister ? (
-            <Button type="button" className="h-9 shrink-0" onClick={onRegister}>
-              {registerLabel}
+      <div className="flex min-w-0 w-full flex-1 flex-wrap items-center gap-2 sm:w-auto">
+        {showExcelActions ? (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled
+              title="퍼블"
+              className="h-8 border-[var(--color-border)] bg-white text-xs shadow-none"
+            >
+              샘플다운로드
             </Button>
-          ) : null}
-        </div>
-      ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled
+              title="퍼블"
+              className="h-8 border-[var(--color-border)] bg-white text-xs shadow-none"
+            >
+              엑셀업로드
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled
+              title="퍼블"
+              className="h-8 border-[var(--color-border)] bg-white text-xs shadow-none"
+            >
+              엑셀다운로드
+            </Button>
+          </div>
+        ) : null}
+        {registerLabel && onRegister ? (
+          <Button
+            type="button"
+            className="ml-auto h-9 shrink-0"
+            onClick={onRegister}
+          >
+            {registerLabel}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

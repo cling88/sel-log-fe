@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { Button } from "@/components/ui/button";
+import { MODAL_DIALOG_FOOTER_CLASS } from "@/components/common/modal-footer-classes";
 import {
   Dialog,
   DialogContent,
@@ -99,13 +100,13 @@ export function AppDialogProvider({ children }: { children: ReactNode }) {
         }}
       >
         <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-sm">
-          <DialogHeader className="border-b border-[var(--color-border)] px-5 py-4">
+          <DialogHeader className="border-b border-[var(--color-border)] px-5 py-4 pb-5">
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription className="text-[var(--color-text-primary)]">
               {message}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2 border-t border-[var(--color-border)] px-5 py-[0.6rem] sm:justify-end">
+          <DialogFooter className={MODAL_DIALOG_FOOTER_CLASS}>
             {kind === "confirm" ? (
               <>
                 <Button
