@@ -1,104 +1,46 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { login } from "@/lib/auth";
 import { Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { loginDevBypass } from "@/lib/auth";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const from = searchParams.get("from") ?? "/dashboard";
 
-  const emailRef = useRef<HTMLInputElement>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    emailRef.current?.focus();
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (loading) return;
-
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail || !password) {
-      setError("이메일과 비밀번호를 입력해 주세요.");
-      return;
-    }
-
-    setError(null);
-    setLoading(true);
-
-    const result = await login(trimmedEmail, password);
-
-    if (!result.ok) {
-      setError(result.message);
-      setLoading(false);
-      return;
-    }
-
+  const handleLogin = () => {
+    loginDevBypass();
     router.replace(from.startsWith("/") ? from : "/dashboard");
   };
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="mt-8 flex max-w-[400px] flex-col gap-4">
-      {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
-
-      <label className="block text-sm">
-        <span className="text-[var(--color-text-secondary)]">이메일</span>
-        <input
-          ref={emailRef}
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 h-10 w-full rounded-lg border border-[var(--color-border)] px-3 outline-none transition-shadow focus:ring-2 focus:ring-[var(--primary-300)]"
-        />
-      </label>
-
-      <label className="block text-sm">
-        <span className="text-[var(--color-text-secondary)]">비밀번호</span>
-        <input
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 h-10 w-full rounded-lg border border-[var(--color-border)] px-3 outline-none transition-shadow focus:ring-2 focus:ring-[var(--primary-300)]"
-        />
-      </label>
+    <div className="mt-8 flex max-w-[400px] flex-col gap-4">
+      <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        개발 중: 로그인 버튼만 누르면 메인으로 이동합니다. (BE 연동 후 실제 인증으로
+        교체 예정)
+      </p>
 
       <button
-        type="submit"
-        disabled={loading}
-        className="mt-2 flex h-10 items-center justify-center rounded-lg bg-[var(--primary-500)] text-sm font-medium text-white transition-colors hover:bg-[var(--primary-600)] disabled:opacity-60"
+        type="button"
+        onClick={handleLogin}
+        className="flex h-10 items-center justify-center rounded-lg bg-[var(--primary-500)] text-sm font-medium text-white transition-colors hover:bg-[var(--primary-600)]"
       >
-        {loading ? "로그인 중..." : "로그인"}
+        로그인
       </button>
-    </form>
+    </div>
   );
 }
 
 export default function LoginPage() {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      {/* 좌측 브랜드 패널 */}
       <section className="hidden flex-1 flex-col justify-center bg-[var(--primary-900)] px-10 py-12 text-[var(--color-text-inverse)] md:flex">
         <p className="text-2xl font-semibold">Sellog</p>
         <p className="mt-6 text-lg font-medium">셀러를 위한</p>
         <p className="text-lg font-medium">스마트한 장부</p>
       </section>
 
-      {/* 우측 로그인 폼 */}
       <section className="flex flex-1 flex-col justify-center px-6 py-12">
         <p className="text-xl font-semibold text-[var(--color-text-primary)] md:hidden">
           Sellog

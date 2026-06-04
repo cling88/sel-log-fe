@@ -78,6 +78,11 @@ export async function login(
   }
 }
 
+/** 개발용 — BE 없이 로그인 버튼만으로 통과 (미들웨어용 쿠키 설정) */
+export function loginDevBypass(): void {
+  setTokenCookie("dev-bypass");
+}
+
 /** 로그아웃 — 쿠키 삭제 후 /login으로 이동 */
 export function logout() {
   clearTokenCookie();
