@@ -2,8 +2,20 @@
 
 import { useMemo, useState } from "react";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
+import { useLedgerUrlSearch } from "@/hooks/use-ledger-url-search";
 import { LedgerEmptyState } from "@/components/ledger/empty-state";
-import { LedgerStockReflectDialog } from "@/components/ledger/purchase/ledger-stock-reflect-dialog";
+import {
+  LedgerListShell,
+  ledgerListBodyClass,
+  ledgerListFooterClass,
+} from "@/components/ledger/ledger-list-shell";
+import {
+  LedgerStockReflectDialog,
+  type StockReflectInfo,
+} from "@/components/ledger/purchase/ledger-stock-reflect-dialog";
+import type { InventoryProduct, InventoryStockHistoryItem } from "@/types/inventory-product";
+
+const PRODUCTS_STORAGE_KEY = "sellog-products-pub-v1";
 import { PurchaseListPagination } from "@/components/ledger/purchase/purchase-list-pagination";
 import { PurchaseListToolbar } from "@/components/ledger/purchase/purchase-list-toolbar";
 import { SupplyExpenseGroupList } from "@/components/ledger/purchase/supply/supply-expense-group-list";
@@ -24,7 +36,7 @@ function newLineId(): string {
 export function SupplyExpensePanel() {
   const { alert, confirm } = useAppDialog();
   const [lines, setLines] = useState<SupplyExpenseLine[]>(PUB_SEED_SUPPLY_LINES);
-  const [search, setSearch] = useState("");
+  const { search, setSearch } = useLedgerUrlSearch();
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDate, setDialogDate] = useState<string | undefined>();
@@ -103,19 +115,6 @@ export function SupplyExpensePanel() {
 
   return (
     <>
-      {hasLines ? (
-        <PurchaseListToolbar
-          search={search}
-          onSearchChange={(v) => {
-            setSearch(v);
-            setPage(1);
-          }}
-          searchPlaceholder="항목명, 구매처 검색"
-          registerLabel="+ 부가 항목 등록"
-          onRegister={() => openRegister()}
-        />
-      ) : null}
-
       {!hasLines ? (
         <LedgerEmptyState
           title="부가"
@@ -123,31 +122,50 @@ export function SupplyExpensePanel() {
           actionLabel="+ 부가 항목 등록하기"
           onAction={() => openRegister()}
         />
-      ) : filteredLines.length === 0 ? (
-        <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
-          검색 결과가 없습니다.
-        </p>
       ) : (
-        <>
-          <SupplyExpenseGroupList
-            groups={pagedGroups}
-            onAddToGroup={(date) => openRegister(date)}
-            onReflectStock={setStockReflectLineId}
-            onCancelStockReflect={(id) =>
-              setLines((prev) =>
-                prev.map((line) =>
-                  line.id === id ? { ...line, stockReflected: false } : line,
-                ),
-              )
-            }
-            onLineClick={openLineDetail}
+        <LedgerListShell>
+          <PurchaseListToolbar
+            embedded
+            search={search}
+            onSearchChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            searchPlaceholder="항목명, 구매처 검색"
+            registerLabel="+ 부가 항목 등록"
+            onRegister={() => openRegister()}
           />
-          <PurchaseListPagination
-            page={safePage}
-            totalPages={totalPages}
-            onPageChange={setPage}
-          />
-        </>
+          {filteredLines.length === 0 ? (
+            <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
+              검색 결과가 없습니다.
+            </p>
+          ) : (
+            <>
+              <div className={ledgerListBodyClass}>
+                <SupplyExpenseGroupList
+                  groups={pagedGroups}
+                  onAddToGroup={(date) => openRegister(date)}
+                  onReflectStock={setStockReflectLineId}
+                  onCancelStockReflect={(id) =>
+                    setLines((prev) =>
+                      prev.map((line) =>
+                        line.id === id ? { ...line, stockReflected: false } : line,
+                      ),
+                    )
+                  }
+                  onLineClick={openLineDetail}
+                />
+              </div>
+              <div className={ledgerListFooterClass}>
+                <PurchaseListPagination
+                  page={safePage}
+                  totalPages={totalPages}
+                  onPageChange={setPage}
+                />
+              </div>
+            </>
+          )}
+        </LedgerListShell>
       )}
 
       <SupplyExpenseRegisterDialog
@@ -184,7 +202,39 @@ export function SupplyExpensePanel() {
           if (!open) setStockReflectLineId(null);
         }}
         target={stockReflectTarget}
-        onConfirm={(lineId) => {
+        onConfirm={(lineId, info: StockReflectInfo) => {
+          // 상품 마스터(localStorage) 재고 반영 (공급비용은 가격 업데이트 미적용)
+          if (typeof globalThis.localStorage !== "undefined") {
+            try {
+              const raw = globalThis.localStorage.getItem(PRODUCTS_STORAGE_KEY);
+              const storedProducts: InventoryProduct[] = raw
+                ? JSON.parse(raw)
+                : [];
+              const now = new Date().toISOString();
+              const updated = storedProducts.map((p) => {
+                if (p.sku !== info.sku || p.deletedAtIso) return p;
+                const stockEntry: InventoryStockHistoryItem = {
+                  id: `stk-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+                  atIso: now,
+                  delta: info.qty,
+                  source: "purchase",
+                  reason: "공급비용 재고반영",
+                };
+                return {
+                  ...p,
+                  stock: p.stock + info.qty,
+                  stockHistory: [stockEntry, ...p.stockHistory],
+                  updatedAtIso: now,
+                };
+              });
+              globalThis.localStorage.setItem(
+                PRODUCTS_STORAGE_KEY,
+                JSON.stringify(updated),
+              );
+            } catch {
+              // 저장 실패 무시
+            }
+          }
           setLines((prev) =>
             prev.map((line) =>
               line.id === lineId ? { ...line, stockReflected: true } : line,

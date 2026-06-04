@@ -9,7 +9,7 @@ export function PurchaseTabPanel() {
   const activeSub = usePurchaseSubTab();
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <PurchaseSubTabs />
       {activeSub === "product" ? (
         <ProductPurchasePanel />

@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 interface PurchaseListToolbarProps {
   search: string;
@@ -10,6 +11,8 @@ interface PurchaseListToolbarProps {
   showExcelActions?: boolean;
   registerLabel?: string;
   onRegister?: () => void;
+  /** 목록 카드 상단에 붙일 때 true */
+  embedded?: boolean;
 }
 
 export function PurchaseListToolbar({
@@ -19,17 +22,25 @@ export function PurchaseListToolbar({
   showExcelActions = false,
   registerLabel,
   onRegister,
+  embedded = false,
 }: PurchaseListToolbarProps) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] px-4 py-3 shadow-[var(--shadow-sm)] sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+    <div
+      className={cn(
+        "flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-3",
+        embedded
+          ? "border-b border-[var(--color-border)] bg-[var(--color-bg-card)]"
+          : "rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] shadow-[var(--shadow-sm)]",
+      )}
+    >
       <Input
         type="search"
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
         placeholder={searchPlaceholder}
-        className="h-9 min-w-0 w-full border-[var(--color-border)] bg-white shadow-none sm:max-w-md sm:flex-none"
+        className="h-9 min-w-0 w-full flex-1 border-[var(--color-border)] bg-white shadow-none"
       />
-      <div className="flex min-w-0 w-full flex-1 flex-wrap items-center gap-2 sm:w-auto">
+      <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:shrink-0 sm:justify-end">
         {showExcelActions ? (
           <div className="flex flex-wrap gap-2">
             <Button

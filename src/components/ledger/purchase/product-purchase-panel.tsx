@@ -2,7 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
+import { useLedgerUrlSearch } from "@/hooks/use-ledger-url-search";
 import { LedgerEmptyState } from "@/components/ledger/empty-state";
+import {
+  LedgerListShell,
+  ledgerListBodyClass,
+  ledgerListFooterClass,
+} from "@/components/ledger/ledger-list-shell";
 import { LedgerStockReflectDialog } from "@/components/ledger/purchase/ledger-stock-reflect-dialog";
 import { ProductPurchaseGroupEditDialog } from "@/components/ledger/purchase/product-purchase-group-edit-dialog";
 import { ProductPurchaseGroupList } from "@/components/ledger/purchase/product-purchase-group-list";
@@ -24,6 +30,14 @@ import {
   type PurchaseGroupMeta,
 } from "@/types/purchase-group";
 import type { ProductPurchaseLine } from "@/types/purchase-product";
+import type {
+  InventoryPriceHistoryItem,
+  InventoryProduct,
+  InventoryStockHistoryItem,
+} from "@/types/inventory-product";
+import type { StockReflectInfo } from "@/components/ledger/purchase/ledger-stock-reflect-dialog";
+
+const PRODUCTS_STORAGE_KEY = "sellog-products-pub-v1";
 
 function newLineId(): string {
   return `pp-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
@@ -49,7 +63,7 @@ export function ProductPurchasePanel() {
   const [groupMeta, setGroupMeta] = useState<Record<string, PurchaseGroupMeta>>(
     () => ({ ...PUB_SEED_PRODUCT_GROUP_META }),
   );
-  const [search, setSearch] = useState("");
+  const { search, setSearch } = useLedgerUrlSearch();
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDate, setDialogDate] = useState<string | undefined>();
@@ -219,10 +233,70 @@ export function ProductPurchasePanel() {
     await alert("그룹 정보가 저장되었습니다.");
   };
 
-  const finishStockReflect = async (lineId: string) => {
+  const finishStockReflect = async (lineId: string, info: StockReflectInfo) => {
+    const line = lines.find((l) => l.id === lineId);
+
+    // 상품 마스터(localStorage) 재고·가격 반영
+    if (line && typeof globalThis.localStorage !== "undefined") {
+      try {
+        const raw = globalThis.localStorage.getItem(PRODUCTS_STORAGE_KEY);
+        const storedProducts: InventoryProduct[] = raw ? JSON.parse(raw) : [];
+        const now = new Date().toISOString();
+        const unitPrice =
+          info.qty > 0 ? Math.round(line.paymentAmount / info.qty) : 0;
+
+        const updated = storedProducts.map((p) => {
+          if (p.sku !== info.sku || p.deletedAtIso) return p;
+
+          const stockEntry: InventoryStockHistoryItem = {
+            id: `stk-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+            atIso: now,
+            delta: info.qty,
+            source: "purchase",
+            vendor: line.vendor,
+            orderNo: line.orderNo,
+            unitPrice,
+            totalAmount: line.paymentAmount,
+            reason: `매입 재고반영 (${line.productName})`,
+          };
+
+          const priceChanged = unitPrice > 0 && unitPrice !== p.currentPrice;
+          const priceEntry: InventoryPriceHistoryItem | null = priceChanged
+            ? {
+                id: `prh-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+                atIso: now,
+                price: unitPrice,
+                source: "purchase",
+                reason: `매입 반영 (${line.vendor})`,
+              }
+            : null;
+
+          return {
+            ...p,
+            stock: p.stock + info.qty,
+            ...(priceChanged ? { currentPrice: unitPrice } : {}),
+            stockHistory: [stockEntry, ...p.stockHistory],
+            priceHistory: priceEntry
+              ? [priceEntry, ...p.priceHistory]
+              : p.priceHistory,
+            updatedAtIso: now,
+          };
+        });
+
+        globalThis.localStorage.setItem(
+          PRODUCTS_STORAGE_KEY,
+          JSON.stringify(updated),
+        );
+      } catch {
+        // 저장 실패 시 라인 상태는 그대로 반영 처리
+      }
+    }
+
     setLines((prev) =>
-      prev.map((line) =>
-        line.id === lineId ? { ...line, stockReflected: true } : line,
+      prev.map((l) =>
+        l.id === lineId
+          ? { ...l, stockReflected: true, productSku: info.sku }
+          : l,
       ),
     );
     setStockReflectLineId(null);
@@ -291,58 +365,64 @@ export function ProductPurchasePanel() {
 
   return (
     <>
-      {hasLines ? (
-        <PurchaseListToolbar
-          search={search}
-          onSearchChange={(v) => {
-            setSearch(v);
-            setPage(1);
-          }}
-          searchPlaceholder="그룹명, 상품명, 구매처, 주문번호 검색"
-          showExcelActions
-          registerLabel="+ 상품 매입 등록"
-          onRegister={() => openRegister()}
-        />
-      ) : null}
-
       {!hasLines ? (
         <LedgerEmptyState
           title="상품매입"
           actionLabel="+ 상품 매입 등록하기"
           onAction={() => openRegister()}
         />
-      ) : filteredLines.length === 0 ? (
-        <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
-          검색 결과가 없습니다.
-        </p>
       ) : (
-        <>
-          <ProductPurchaseGroupList
-            groups={pagedGroups}
-            groupMeta={groupMeta}
-            onAddToGroup={(date) => openRegister(date)}
-            onReflectStock={setStockReflectLineId}
-            onCancelStockReflect={(id) =>
-              setLines((prev) =>
-                prev.map((line) =>
-                  line.id === id ? { ...line, stockReflected: false } : line,
-                ),
-              )
-            }
-            onLineClick={openEditLine}
-            onEditGroup={(date) => setEditGroupDate(date)}
-            onDeleteGroup={(date) => void handleDeleteGroup(date)}
-            onSaveGroupSummary={handleSaveGroupSummary}
-            savingSummaryDate={savingSummaryDate}
-            onBulkStockReflect={(date) => void handleBulkStockReflect(date)}
-            onToggleOrderCancel={handleToggleOrderCancel}
+        <LedgerListShell>
+          <PurchaseListToolbar
+            embedded
+            search={search}
+            onSearchChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            searchPlaceholder="그룹명, 상품명, 구매처, 주문번호 검색"
+            showExcelActions
+            registerLabel="+ 상품 매입 등록"
+            onRegister={() => openRegister()}
           />
-          <PurchaseListPagination
-            page={safePage}
-            totalPages={totalPages}
-            onPageChange={setPage}
-          />
-        </>
+          {filteredLines.length === 0 ? (
+            <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
+              검색 결과가 없습니다.
+            </p>
+          ) : (
+            <>
+              <div className={ledgerListBodyClass}>
+                <ProductPurchaseGroupList
+                  groups={pagedGroups}
+                  groupMeta={groupMeta}
+                  onAddToGroup={(date) => openRegister(date)}
+                  onReflectStock={setStockReflectLineId}
+                  onCancelStockReflect={(id) =>
+                    setLines((prev) =>
+                      prev.map((line) =>
+                        line.id === id ? { ...line, stockReflected: false } : line,
+                      ),
+                    )
+                  }
+                  onLineClick={openEditLine}
+                  onEditGroup={(date) => setEditGroupDate(date)}
+                  onDeleteGroup={(date) => void handleDeleteGroup(date)}
+                  onSaveGroupSummary={handleSaveGroupSummary}
+                  savingSummaryDate={savingSummaryDate}
+                  onBulkStockReflect={(date) => void handleBulkStockReflect(date)}
+                  onToggleOrderCancel={handleToggleOrderCancel}
+                />
+              </div>
+              <div className={ledgerListFooterClass}>
+                <PurchaseListPagination
+                  page={safePage}
+                  totalPages={totalPages}
+                  onPageChange={setPage}
+                />
+              </div>
+            </>
+          )}
+        </LedgerListShell>
       )}
 
       <ProductPurchaseRegisterDialog
@@ -386,7 +466,7 @@ export function ProductPurchasePanel() {
           }
         }}
         target={stockReflectTarget}
-        onConfirm={(id) => void finishStockReflect(id)}
+        onConfirm={(id, info) => void finishStockReflect(id, info)}
       />
     </>
   );

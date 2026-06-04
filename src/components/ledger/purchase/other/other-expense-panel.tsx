@@ -2,7 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
+import { useLedgerUrlSearch } from "@/hooks/use-ledger-url-search";
 import { LedgerEmptyState } from "@/components/ledger/empty-state";
+import {
+  LedgerListShell,
+  ledgerListBodyClass,
+  ledgerListFooterClass,
+} from "@/components/ledger/ledger-list-shell";
 import { OtherExpenseGroupList } from "@/components/ledger/purchase/other/other-expense-group-list";
 import { OtherExpenseRegisterDialog } from "@/components/ledger/purchase/other/other-expense-register-dialog";
 import { PurchaseListPagination } from "@/components/ledger/purchase/purchase-list-pagination";
@@ -23,7 +29,7 @@ function newLineId(): string {
 export function OtherExpensePanel() {
   const { alert, confirm } = useAppDialog();
   const [lines, setLines] = useState<OtherExpenseLine[]>(PUB_SEED_OTHER_LINES);
-  const [search, setSearch] = useState("");
+  const { search, setSearch } = useLedgerUrlSearch();
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDate, setDialogDate] = useState<string | undefined>();
@@ -78,19 +84,6 @@ export function OtherExpensePanel() {
 
   return (
     <>
-      {hasLines ? (
-        <PurchaseListToolbar
-          search={search}
-          onSearchChange={(v) => {
-            setSearch(v);
-            setPage(1);
-          }}
-          searchPlaceholder="항목명, 비고 검색"
-          registerLabel="+ 기타지출 등록"
-          onRegister={() => openRegister()}
-        />
-      ) : null}
-
       {!hasLines ? (
         <LedgerEmptyState
           title="기타지출"
@@ -98,23 +91,42 @@ export function OtherExpensePanel() {
           actionLabel="+ 기타지출 등록하기"
           onAction={() => openRegister()}
         />
-      ) : filteredLines.length === 0 ? (
-        <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
-          검색 결과가 없습니다.
-        </p>
       ) : (
-        <>
-          <OtherExpenseGroupList
-            groups={pagedGroups}
-            onAddToGroup={(date) => openRegister(date)}
-            onLineClick={openLineDetail}
+        <LedgerListShell>
+          <PurchaseListToolbar
+            embedded
+            search={search}
+            onSearchChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            searchPlaceholder="항목명, 비고 검색"
+            registerLabel="+ 기타지출 등록"
+            onRegister={() => openRegister()}
           />
-          <PurchaseListPagination
-            page={safePage}
-            totalPages={totalPages}
-            onPageChange={setPage}
-          />
-        </>
+          {filteredLines.length === 0 ? (
+            <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
+              검색 결과가 없습니다.
+            </p>
+          ) : (
+            <>
+              <div className={ledgerListBodyClass}>
+                <OtherExpenseGroupList
+                  groups={pagedGroups}
+                  onAddToGroup={(date) => openRegister(date)}
+                  onLineClick={openLineDetail}
+                />
+              </div>
+              <div className={ledgerListFooterClass}>
+                <PurchaseListPagination
+                  page={safePage}
+                  totalPages={totalPages}
+                  onPageChange={setPage}
+                />
+              </div>
+            </>
+          )}
+        </LedgerListShell>
       )}
 
       <OtherExpenseRegisterDialog

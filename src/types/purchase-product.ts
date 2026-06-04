@@ -10,6 +10,8 @@ export interface ProductPurchaseLine {
   paymentAmount: number;
   memo: string;
   stockReflected: boolean;
+  /** 재고반영 시 선택한 상품관리 SKU */
+  productSku?: string;
 }
 
 export interface ProductPurchaseLineInput {

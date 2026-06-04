@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { MODAL_DIALOG_FOOTER_CLASS } from "@/components/common/modal-footer-classes";
 import { formatAmount } from "@/lib/purchase-product-calc";
 import { cn } from "@/lib/utils";
+import type { InventoryProduct } from "@/types/inventory-product";
 import { Minus, Plus } from "lucide-react";
 
 export interface LedgerStockReflectTarget {
@@ -24,18 +25,28 @@ export interface LedgerStockReflectTarget {
   quantity: number;
 }
 
-/** 퍼블용 샘플 상품 (상품관리 연동 전) */
-const PUB_SAMPLE_PRODUCTS = [
-  { sku: "PKG-0001", name: "골판지 박스 (중)", stock: 120 },
-  { sku: "PKG-0002", name: "완충 랩", stock: 45 },
-  { sku: "TOY-0001", name: "샘플 피규어 A", stock: 8 },
-];
+export interface StockReflectInfo {
+  sku: string;
+  qty: number;
+}
+
+const PRODUCTS_STORAGE_KEY = "sellog-products-pub-v1";
+
+function loadStoredProducts(): InventoryProduct[] {
+  if (typeof globalThis.localStorage === "undefined") return [];
+  try {
+    const raw = globalThis.localStorage.getItem(PRODUCTS_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as InventoryProduct[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 interface LedgerStockReflectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   target: LedgerStockReflectTarget | null;
-  onConfirm: (lineId: string) => void;
+  onConfirm: (lineId: string, info: StockReflectInfo) => void;
 }
 
 export function LedgerStockReflectDialog({
@@ -44,20 +55,36 @@ export function LedgerStockReflectDialog({
   target,
   onConfirm,
 }: LedgerStockReflectDialogProps) {
+  const skuSelectRef = useRef<HTMLDivElement | null>(null);
+  const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [qty, setQty] = useState(1);
   const [selectedSku, setSelectedSku] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [skuSelectOpen, setSkuSelectOpen] = useState(false);
 
   useEffect(() => {
     if (!open || !target) return;
+    setProducts(loadStoredProducts().filter((p) => !p.deletedAtIso && p.active));
     setQty(target.quantity);
     setSelectedSku(null);
     setSearch("");
+    setSkuSelectOpen(false);
   }, [open, target?.id, target?.quantity]);
+
+  useEffect(() => {
+    if (!skuSelectOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!skuSelectRef.current) return;
+      if (skuSelectRef.current.contains(event.target as Node)) return;
+      setSkuSelectOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [skuSelectOpen]);
 
   if (!target) return null;
 
-  const filtered = PUB_SAMPLE_PRODUCTS.filter(
+  const filtered = products.filter(
     (p) =>
       p.sku.toLowerCase().includes(search.toLowerCase()) ||
       p.name.toLowerCase().includes(search.toLowerCase()),
@@ -67,79 +94,102 @@ export function LedgerStockReflectDialog({
     setQty((prev) => Math.max(1, prev + delta));
   };
 
+  const selectedProduct = products.find((p) => p.sku === selectedSku);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(85vh,640px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+      <DialogContent className="flex max-h-[min(90vh,620px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
         <DialogHeader className="border-b border-[var(--color-border)] px-5 py-4">
-          <DialogTitle>재고 반영</DialogTitle>
+          <DialogTitle>{`${target.title} 재고 반영`}</DialogTitle>
           <DialogDescription>
-            상품관리에 등록된 SKU를 선택합니다. (퍼블 샘플 목록)
+            상품관리에 등록된 상품을 선택하고 반영할 수량을 확인하세요.
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm">
-            <p className="font-medium text-[var(--color-text-primary)]">
-              {target.title}
-            </p>
-            {target.subtitle ? (
-              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                {target.subtitle}
+          <div className="space-y-1.5">
+            <Label htmlFor="stock-search">상품 선택</Label>
+            {products.length === 0 ? (
+              <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-3 text-sm text-[var(--color-text-muted)]">
+                상품관리에 등록된 상품이 없습니다. 먼저 상품을 등록해 주세요.
               </p>
-            ) : null}
+            ) : (
+              <div ref={skuSelectRef} className="relative">
+                <Input
+                  id="stock-search"
+                  value={search}
+                  onFocus={() => setSkuSelectOpen(true)}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setSkuSelectOpen(true);
+                    if (selectedSku) setSelectedSku(null);
+                  }}
+                  placeholder="SKU 또는 상품명으로 검색"
+                />
+
+                {skuSelectOpen ? (
+                  <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-lg border border-[var(--color-border)] bg-white shadow-[0_10px_30px_rgba(2,6,23,0.16)]">
+                    <ul className="max-h-[200px] divide-y divide-[var(--color-border)] overflow-y-auto">
+                      {filtered.length === 0 ? (
+                        <li className="px-3 py-8 text-center text-sm text-[var(--color-text-muted)]">
+                          검색 결과가 없습니다.
+                        </li>
+                      ) : (
+                        filtered.map((p) => (
+                          <li key={p.sku}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedSku(p.sku);
+                                setSearch(`${p.sku} | ${p.name}`);
+                                setSkuSelectOpen(false);
+                              }}
+                              className={cn(
+                                "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--primary-50)]/50",
+                                selectedSku === p.sku && "bg-[var(--primary-50)]",
+                              )}
+                            >
+                              <span className="min-w-0">
+                                <span className="font-mono text-xs text-[var(--color-text-muted)]">
+                                  {p.sku}
+                                </span>
+                                <span className="ml-2 text-[var(--color-text-primary)]">
+                                  {p.name}
+                                </span>
+                                {p.category ? (
+                                  <span className="ml-2 text-xs text-[var(--color-text-secondary)]">
+                                    [{p.category}]
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="shrink-0 tabular-nums text-[var(--color-text-secondary)]">
+                                {p.stock}개
+                              </span>
+                            </button>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="stock-category">카테고리</Label>
-              <Input id="stock-category" disabled placeholder="전체 (추후)" />
+          {selectedProduct ? (
+            <div className="rounded-lg border border-[var(--primary-200)] bg-[var(--primary-50)]/40 px-3 py-3 text-sm">
+              <p className="text-xs text-[var(--color-text-muted)]">선택된 상품</p>
+              <p className="mt-0.5 font-medium text-[var(--color-text-primary)]">
+                {selectedProduct.name}
+              </p>
+              <p className="tabular-nums text-[var(--color-text-secondary)]">
+                현재 재고: {selectedProduct.stock}개 → 반영 후:{" "}
+                <span className="font-medium text-[var(--primary-600)]">
+                  {selectedProduct.stock + qty}개
+                </span>
+              </p>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="stock-search">상품 검색</Label>
-              <Input
-                id="stock-search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="SKU · 상품명"
-              />
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-[var(--color-border)]">
-            <div className="border-b border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)]">
-              SKU / 상품명 / 현재재고
-            </div>
-            <ul className="max-h-40 divide-y divide-[var(--color-border)] overflow-y-auto">
-              {filtered.map((p) => (
-                <li key={p.sku}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedSku(p.sku)}
-                    className={cn(
-                      "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--primary-50)]/50",
-                      selectedSku === p.sku && "bg-[var(--primary-50)]",
-                    )}
-                  >
-                    <span>
-                      <span className="font-mono text-xs text-[var(--color-text-muted)]">
-                        {p.sku}
-                      </span>
-                      <span className="ml-2 text-[var(--color-text-primary)]">
-                        {p.name}
-                      </span>
-                    </span>
-                    <span className="shrink-0 tabular-nums text-[var(--color-text-secondary)]">
-                      {p.stock}개
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <Button type="button" variant="outline" size="sm" disabled>
-            + 상품 등록 (추후)
-          </Button>
+          ) : null}
 
           <div className="space-y-1.5">
             <Label>반영 수량</Label>
@@ -157,9 +207,7 @@ export function LedgerStockReflectDialog({
                 type="number"
                 min={1}
                 value={qty}
-                onChange={(e) =>
-                  setQty(Math.max(1, Number(e.target.value) || 1))
-                }
+                onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))}
                 className="w-24 text-center tabular-nums"
               />
               <Button
@@ -183,7 +231,8 @@ export function LedgerStockReflectDialog({
             type="button"
             disabled={!selectedSku}
             onClick={() => {
-              onConfirm(target.id);
+              if (!selectedSku) return;
+              onConfirm(target.id, { sku: selectedSku, qty });
               onOpenChange(false);
             }}
           >

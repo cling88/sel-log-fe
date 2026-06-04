@@ -50,8 +50,8 @@ export function PurchaseSubTabs() {
   };
 
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] shadow-[var(--shadow-sm)]">
-      <div className="flex flex-wrap items-end gap-x-6 gap-y-2 border-b border-[var(--color-border)] px-4 pt-3 sm:px-5">
+    <div className="border-b border-[var(--color-border)]">
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-2 px-0 pt-1">
         {subTabOrder.map((id) => {
           const { label } = purchaseSubTabConfig[id];
           const active = id === activeSub;
@@ -75,7 +75,7 @@ export function PurchaseSubTabs() {
           );
         })}
       </div>
-      <p className="px-4 py-3 text-sm leading-relaxed text-[var(--color-text-secondary)] sm:px-5">
+      <p className="pb-3 pt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
         {purchaseSubTabConfig[activeSub].description}
       </p>
     </div>

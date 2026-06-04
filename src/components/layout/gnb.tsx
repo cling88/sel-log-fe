@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { logout } from "@/lib/auth";
 
 const navItems = [
   { href: "/dashboard", label: "대시보드" },
@@ -44,7 +45,8 @@ export function Gnb() {
         </nav>
         <button
           type="button"
-          className="text-sm text-white/70 hover:text-white"
+          onClick={logout}
+          className="text-sm text-white/70 transition-colors hover:text-white"
         >
           로그아웃
         </button>
