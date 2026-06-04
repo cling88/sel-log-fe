@@ -58,7 +58,7 @@ export function LedgerMonthTabs({ tabId }: LedgerMonthTabsProps) {
     router.replace(`/ledger?${params.toString()}`);
   };
 
-  if (monthTabs.length === 0) return null;
+  if (monthTabs.length === 0) return <LedgerMonthTabsSpacer />;
 
   return (
     <div
@@ -85,6 +85,19 @@ export function LedgerMonthTabs({ tabId }: LedgerMonthTabsProps) {
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+/** 월 탭 미사용 탭(상품관리)에서 레이아웃 높이만 유지 */
+export function LedgerMonthTabsSpacer() {
+  return (
+    <div className="overflow-hidden relative mb-[-1px] z-10" aria-hidden>
+      <div className="flex min-w-max gap-0.5 pt-1">
+        <span className="relative shrink-0 border border-transparent px-5 py-1 text-xs text-transparent select-none">
+          {"\u00a0"}
+        </span>
       </div>
     </div>
   );

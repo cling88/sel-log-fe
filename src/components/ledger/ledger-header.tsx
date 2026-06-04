@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LedgerYearPicker } from "@/components/ledger/ledger-year-picker";
+import { isMonthScopedLedgerTab } from "@/lib/ledger-period";
 import { cn } from "@/lib/utils";
 import type { LedgerTabId, PeriodPreset } from "@/types/common";
 import { ChevronDown, ChevronUp } from "lucide-react";
@@ -176,7 +177,7 @@ export function LedgerHeader() {
       )}
 
       <div className="border-b border-[var(--color-border-dark)] bg-[var(--primary-900)] px-4 sm:px-6">
-        <LedgerYearPicker />
+        <LedgerYearPicker interactive={isMonthScopedLedgerTab(activeTab)} />
       </div>
 
       <nav className="flex gap-4 bg-[var(--primary-900)] px-4 pb-0 pt-2 sm:px-6">

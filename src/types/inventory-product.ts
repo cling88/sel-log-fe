@@ -1,11 +1,21 @@
 export type InventoryProductStockAction = "increase" | "decrease";
+
+/** BE 변경 구분 — 수동 금액/재고 조정 시에만 내려옴 */
+export type ProductChangeKind = "price" | "stock";
+export type ProductChangeFrom = "edit" | "stock_adjust";
+
+export interface ProductChangeTags {
+  changeKind?: ProductChangeKind;
+  changeFrom?: ProductChangeFrom;
+}
+
 export type InventoryPriceHistorySource =
   | "product_register"
   | "manual_edit"
   | "purchase";
 export type InventoryStockHistorySource = "purchase" | "sale" | "manual_adjust";
 
-export interface InventoryStockHistoryItem {
+export interface InventoryStockHistoryItem extends ProductChangeTags {
   id: string;
   atIso: string; // ISO string
   delta: number; // +로 증가, -로 감소
@@ -17,7 +27,7 @@ export interface InventoryStockHistoryItem {
   reason?: string;
 }
 
-export interface InventoryPriceHistoryItem {
+export interface InventoryPriceHistoryItem extends ProductChangeTags {
   id: string;
   atIso: string;
   price: number;
@@ -25,7 +35,7 @@ export interface InventoryPriceHistoryItem {
   reason?: string;
 }
 
-export interface InventoryProduct {
+export interface InventoryProduct extends ProductChangeTags {
   id: string;
   sku: string;
   name: string;

@@ -1,5 +1,10 @@
 import type { LedgerTabId } from "@/types/common";
 
+/** 매입·매출·수익만 월별 조회. 상품관리는 마스터 데이터라 월 필터 없음 */
+export function isMonthScopedLedgerTab(tab: LedgerTabId): boolean {
+  return tab === "purchase" || tab === "sale" || tab === "income";
+}
+
 /** 퍼블 기준 장부 사용 시작 월 (추후 BE createdAt 연동) */
 export const PUB_LEDGER_START_YM = "2026-01";
 
@@ -85,4 +90,54 @@ export function listYearOptions() {
   const [startYearStr] = PUB_LEDGER_START_YM.split("-");
   const startYear = Number(startYearStr);
   return Array.from({ length: currentYear - startYear + 1 }, (_, i) => startYear + i);
+}
+
+/** 장부 시작 월 ~ 이번 달 범위에서 이전/다음 달 (없으면 null) */
+export function shiftYearMonth(
+  year: number,
+  month: number,
+  direction: "prev" | "next",
+): { year: number; month: number } | null {
+  const tab: LedgerTabId = "purchase";
+  const tabs = listMonthTabsForYear(tab, year);
+  const current = toYearMonthParam(year, month);
+  let idx = tabs.findIndex((t) => t.value === current);
+
+  if (idx === -1) {
+    const resolved = resolveSelectedMonthForTab(tab, year, month);
+    if (resolved.year === year && resolved.month === month) return null;
+    return shiftYearMonth(resolved.year, resolved.month, direction);
+  }
+
+  if (direction === "prev") {
+    if (idx > 0) {
+      const prev = parseYearMonth(tabs[idx - 1].value);
+      return prev;
+    }
+    const prevYearTabs = listMonthTabsForYear(tab, year - 1);
+    if (prevYearTabs.length === 0) return null;
+    return parseYearMonth(prevYearTabs[prevYearTabs.length - 1].value);
+  }
+
+  if (idx < tabs.length - 1) {
+    return parseYearMonth(tabs[idx + 1].value);
+  }
+  const nextYearTabs = listMonthTabsForYear(tab, year + 1);
+  if (nextYearTabs.length === 0) return null;
+  return parseYearMonth(nextYearTabs[0].value);
+}
+
+/** ISO 날짜 문자열이 지정 연·월에 속하는지 (API 이력 필터용) */
+export function isoMatchesYearMonth(
+  iso: string,
+  year: number,
+  month: number,
+): boolean {
+  const match = /^(\d{4})-(\d{2})/.exec(iso);
+  if (match) {
+    return Number(match[1]) === year && Number(match[2]) === month;
+  }
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.getFullYear() === year && d.getMonth() + 1 === month;
 }

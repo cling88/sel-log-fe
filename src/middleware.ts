@@ -21,7 +21,12 @@ export function middleware(request: NextRequest) {
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
 
-  const token = request.cookies.get(TOKEN_COOKIE)?.value;
+  const rawToken = request.cookies.get(TOKEN_COOKIE)?.value;
+  /** 개발용 우회 토큰은 BE에서 거부되므로 미인증 처리 */
+  const token =
+    rawToken && rawToken !== "dev-bypass" && rawToken.trim().length > 0
+      ? rawToken
+      : undefined;
 
   // 미인증 + 보호 경로 → 로그인으로 리다이렉트
   if (!token && !isPublic) {

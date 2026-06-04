@@ -3,10 +3,11 @@
 import type { ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { IncomeTabPanel } from "@/components/ledger/income/income-tab-panel";
-import { LedgerMonthTabs } from "@/components/ledger/ledger-month-tabs";
+import { LedgerMonthTabs, LedgerMonthTabsSpacer } from "@/components/ledger/ledger-month-tabs";
 import { PurchaseTabPanel } from "@/components/ledger/purchase/purchase-tab-panel";
 import { ProductsTabPanel } from "@/components/ledger/products/products-tab-panel";
 import { SaleTabPanel } from "@/components/ledger/sale/sale-tab-panel";
+import { isMonthScopedLedgerTab } from "@/lib/ledger-period";
 import type { LedgerTabId } from "@/types/common";
 
 function isLedgerTab(value: string | null): value is LedgerTabId {
@@ -29,10 +30,18 @@ export function LedgerTabContent() {
   else if (activeTab === "income") panel = <IncomeTabPanel />;
   else if (activeTab === "products") panel = <ProductsTabPanel />;
 
+  const showMonthTabs = isMonthScopedLedgerTab(activeTab);
+
   return (
     <div className="overflow-hidden relative ">
-      <LedgerMonthTabs tabId={activeTab} />
-      <div className="p-4 sm:p-6 rounded-xl border border-[var(--color-text-muted)] bg-white shadow-[var(--shadow-md)] relative z-0">{panel}</div>
+      {showMonthTabs ? (
+        <LedgerMonthTabs tabId={activeTab} />
+      ) : (
+        <LedgerMonthTabsSpacer />
+      )}
+      <div className="relative z-0 rounded-xl border border-[var(--color-text-muted)] bg-white p-4 shadow-[var(--shadow-md)] sm:p-6">
+        {panel}
+      </div>
     </div>
   );
 }
