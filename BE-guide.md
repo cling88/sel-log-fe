@@ -1,7 +1,8 @@
 # Sellog — BE API 연동 가이드
 
-> FE 퍼블 구현 기준 작성. 서비스 로직 세부내용은 `service-guide.md` 참조.  
-> 이 문서는 **각 화면·기능별 필요 API, 요청값, 응답값** 위주로 정리한다.
+> **FE API 연동 기준** (2026-06). 서비스 로직 세부내용은 `service-guide.md` 참조.  
+> 이 문서는 **각 화면·기능별 필요 API, 요청값, 응답값** 위주로 정리한다.  
+> FE는 브라우저에서 `/api/v1` → Next.js rewrite로 BE 프록시 (`API_PROXY_TARGET`).
 
 ---
 
@@ -34,8 +35,15 @@
 
 ### 인증
 
-- 모든 API: `Authorization: Bearer <token>` 헤더 필요
-- 인증 API 별도 정의 (로그인/로그아웃/토큰 갱신)
+- 보호 API: `Authorization: Bearer <accessToken>` 헤더 필요
+- FE: accessToken은 쿠키 `sellog_token` + localStorage, refreshToken은 localStorage
+
+| API | 설명 |
+|-----|------|
+| `POST /auth/login` | `{ email, password }` → `{ accessToken, refreshToken, user }` |
+| `POST /auth/refresh` | `{ refreshToken }` → 토큰 로테이션 (동일 구조) |
+
+로그아웃은 FE에서 세션 삭제만 수행 (별도 BE API 없음).
 
 ---
 
@@ -45,38 +53,83 @@
 
 ### `GET /ledger/summary`
 
-**설명**: 전체 기간 집계값 반환 (기간 필터 없음 — 전체 최종값 합산)
+**설명**: 장부 상단 정산 추이 카드 3개 + 하단 순손익 문구
+
+| 파라미터 | 필수 | 값 |
+|----------|------|-----|
+| `period` | — | `all`(기본) \| `year` \| `month` \| `week` \| `today` |
+
+**기간 필터 적용 대상**
+
+| 필드 | 날짜 컬럼 | 범위 |
+|------|-----------|------|
+| `purchase.*` | `payment_date` | 상품매입 + 부가만 (기타지출 제외) |
+| `sale.*` | `order_date` | `status = normal` 만 |
+| `income.*` | `deposit_date` | 입금 전체 |
+
+- `otherExpense.total`은 **`period`와 무관하게 항상 전체 누적**
+- `netTotal` = `income.total`(선택 기간) − `otherExpense.total`(누적) — 서버 계산값 사용
+- `week` = 이번 주 월요일(UTC) ~ 오늘
 
 **응답**
 
 ```jsonc
 {
   "data": {
+    "period": "month",
     "purchase": {
-      "productTotal": 192500,   // 상품매입 합계
-      "supplyTotal": 40000,     // 공급비용(부가) 합계
-      "total": 232500           // 위 둘의 합
+      "productTotal": 192500,
+      "supplyTotal": 40000,
+      "total": 232500,
+      "count": 4              // 상품+부가 라인 건수
     },
     "sale": {
-      "normalTotal": 50000,     // status=normal 주문 totalAmount 합계
+      "normalTotal": 50000,
       "normalCount": 1
     },
     "income": {
-      "total": 120000,          // 입금 amount 합계
+      "total": 120000,
       "count": 1
     },
     "otherExpense": {
-      "total": 660000           // 기타지출 합계 (누적)
-    }
+      "total": 660000
+    },
+    "netTotal": -540000
   }
 }
 ```
+
+### `GET /ledger/earliest-month`
+
+**설명**: 연도·탭별 최초 데이터 월 → 월 탭 범위 (상품관리 탭은 미호출)
+
+| 파라미터 | 필수 | 값 |
+|----------|------|-----|
+| `year` | ✓ | 2000~2100 |
+| `tab` | ✓ | `purchase` \| `sale` \| `income` |
+
+```jsonc
+{
+  "data": {
+    "year": 2026,
+    "tab": "purchase",
+    "month": "2026-03"   // 해당 연도에 데이터 없으면 null
+  }
+}
+```
+
+| `tab` | 날짜 기준 |
+|-------|-----------|
+| `purchase` | 상품매입 + 부가 + 기타 `payment_date` 중 가장 이른 월 |
+| `sale` | `sale_orders.order_date` |
+| `income` | `income_lines.deposit_date` |
 
 ---
 
 ## 2. 전역 검색
 
-> 화면: 장부 헤더 검색 아이콘 → 모달
+> 화면: 장부 헤더 검색 아이콘 → 모달  
+> **FE 연동 상태**: 미연동 (시드 + localStorage 상품). 아래 스펙은 2차 목표.
 
 ### `GET /ledger/search`
 
@@ -150,6 +203,13 @@
           "quantity": 10,
           "paymentAmount": 150000,
           "memo": "1차 입고",
+          "bankId": "bank-001",        // null 가능
+          "bank": {                    // 스냅샷, bankId 있을 때
+            "id": "bank-001",
+            "bankName": "국민은행",
+            "accountNumber": "1234567890",
+            "accountHolder": "홍길동"
+          },
           "stockReflected": false,
           "productSku": null           // 재고반영 전 null
         }
@@ -176,11 +236,12 @@
   "vendor": "도매몰A",
   "quantity": 10,
   "paymentAmount": 150000,
-  "memo": "1차 입고"                // 선택
+  "memo": "1차 입고",               // 선택
+  "bankId": "bank-001"              // 선택, null 가능
 }
 ```
 
-**응답**: 생성된 `ProductPurchaseLine` 객체
+**응답**: 생성된 `ProductPurchaseLine` 객체 (`bank` 스냅샷 포함 가능)
 
 ---
 
@@ -248,10 +309,17 @@
 
 **`DELETE /purchase/products/:id/stock-reflect`**
 
+**제약**:
+- 해당 반영분으로 **이미 판매(재고 차감)된 수량이 있으면** `409 Conflict`  
+  (예: `"판매 내역이 있어 재고반영 취소가 불가합니다."`)
+- `currentPrice` / `price_history`는 **되돌리지 않음** (가격은 유지)
+
 **BE 처리 내용**:
 1. `stockReflected = false`, `productSku = null`
 2. 해당 SKU 상품의 `stock -= qty` (반영 당시 qty 기준)
 3. `stock_history` 역분개 항목 추가
+
+부가(`DELETE /purchase/supply/:id/stock-reflect`)도 동일 패턴. 판매 연동 가드는 BE 정책에 따름.
 
 ---
 
@@ -315,7 +383,10 @@
           "quantity": 100,
           "paymentAmount": 28000,
           "memo": "",
-          "stockReflected": false
+          "bankId": null,
+          "bank": null,
+          "stockReflected": false,
+          "productSku": null
         }
       ]
     }
@@ -336,7 +407,8 @@
   "vendor": "포장재마트",     // 선택
   "quantity": 100,
   "paymentAmount": 28000,
-  "memo": ""
+  "memo": "",
+  "bankId": "bank-001"              // 선택
 }
 ```
 
@@ -405,7 +477,9 @@
           "paymentDate": "2026-06-04",
           "itemName": "사무실 월세",
           "paymentAmount": 550000,
-          "memo": "5월분"
+          "memo": "5월분",
+          "bankId": null,
+          "bank": null
         }
       ]
     }
@@ -424,7 +498,8 @@
   "paymentDate": "2026-06-04",
   "itemName": "사무실 월세",
   "paymentAmount": 550000,
-  "memo": "5월분"
+  "memo": "5월분",
+  "bankId": "bank-001"              // 선택
 }
 ```
 
@@ -462,7 +537,11 @@
       "orderDate": "2026-06-04",
       "orderNo": "SO-260604-01",
       "customerName": "김민수",
-      "channel": "스마트스토어",     // null 가능
+      "channelId": "ch-001",         // null 가능
+      "channel": {                   // 스냅샷, channelId 있을 때
+        "id": "ch-001",
+        "name": "스마트스토어"
+      },
       "items": [
         {
           "productId": "prd-001",
@@ -506,7 +585,7 @@
   "orderDate": "2026-06-04",
   "orderNo": "SO-260604-01",
   "customerName": "김민수",
-  "channel": "스마트스토어",       // 선택
+  "channelId": "ch-001",           // 선택
   "items": [
     {
       "productId": "prd-001",
@@ -525,7 +604,7 @@
 **BE 처리 내용**:
 1. `totalAmount` 계산: `items 합 + extraAdjustments 합 - discountAdjustments 합`
 2. 각 `productId` 상품 `stock` 차감 (재고 부족 시 `409` 반환)
-3. 상품별 `stock_history` 추가 (source: `sale`, orderNo·channel 포함)
+3. 상품별 `stock_history` 추가 (source: `sale`, orderNo·채널명 등 포함)
 4. 응답에 스냅샷(`productSku`, `productName`) 포함
 
 **응답**: 생성된 `SaleOrder` 전체 (스냅샷 포함)
@@ -601,7 +680,14 @@
           "amount": 120000,
           "vatAmount": 10000,          // null 가능
           "commissionAmount": 5000,    // null 가능
-          "memo": ""
+          "memo": "",
+          "bankId": "bank-001",        // 입금계좌, null 가능
+          "bank": {
+            "id": "bank-001",
+            "bankName": "국민은행",
+            "accountNumber": "1234567890",
+            "accountHolder": "홍길동"
+          }
         }
       ]
     }
@@ -629,9 +715,12 @@
   "amount": 120000,
   "vatAmount": 10000,                // 선택
   "commissionAmount": 5000,          // 선택
-  "memo": ""
+  "memo": "",
+  "bankId": "bank-001"               // 선택 (입금계좌)
 }
 ```
+
+> 부가세·수수료는 입력·저장만 되며, 상단 집계·순수익 UI 반영은 2차 예정.
 
 ---
 
@@ -694,7 +783,7 @@
 
 **`GET /products/:id`**
 
-**응답** (목록과 동일하되 이력 포함)
+**응답**: 목록과 동일 필드 (재고·가격 **이력은 별도 API**)
 
 ```jsonc
 {
@@ -710,30 +799,62 @@
     "safetyStock": 3,
     "currentPrice": 25000,
     "createdAtIso": "2026-01-01T00:00:00Z",
-    "updatedAtIso": "2026-06-04T12:00:00Z",
-    "stockHistory": [
-      {
-        "id": "stk-001",
-        "atIso": "2026-06-04T12:00:00Z",
-        "delta": 10,                  // 양수=증가, 음수=감소
-        "source": "purchase",         // purchase | sale | manual_adjust
-        "vendor": "도매몰A",
-        "orderNo": "NV-240501-01",
-        "unitPrice": 15000,
-        "totalAmount": 150000,
-        "reason": "매입 재고반영 (플레이브 피규어 A)"
-      }
-    ],
-    "priceHistory": [
-      {
-        "id": "prh-001",
-        "atIso": "2026-06-04T12:00:00Z",
-        "price": 15000,
-        "source": "purchase",         // product_register | manual_edit | purchase
-        "reason": "매입 반영 (도매몰A)"
-      }
-    ]
+    "updatedAtIso": "2026-06-04T12:00:00Z"
   }
+}
+```
+
+---
+
+### 8-2-1. 재고 이력
+
+**`GET /products/:id/stock-history`**
+
+| 쿼리 | 설명 |
+|------|------|
+| `page` / `limit` | 페이지 (FE 기본 limit 20) |
+| `date` | 이력 발생월 `YYYY-MM` (선택) |
+| `kind` | `purchase` \| `sale` — 미지정 시 전체 재고 이력 |
+
+> FE 히스토리 탭: `전체`는 stock + price API 병렬 조회 후 통합 정렬, `가격수정`은 price-history만, `매입`/`판매`는 stock-history에 `kind` 전달.
+
+**응답 항목 예시**
+
+```jsonc
+{
+  "id": "stk-001",
+  "atIso": "2026-06-04T12:00:00Z",
+  "delta": 10,
+  "source": "purchase",              // purchase | sale | manual_adjust
+  "vendor": "도매몰A",
+  "orderNo": "NV-240501-01",
+  "unitPrice": 15000,
+  "totalAmount": 150000,
+  "reason": "매입 재고반영 (플레이브 피규어 A)"
+}
+```
+
+---
+
+### 8-2-2. 가격 이력
+
+**`GET /products/:id/price-history`**
+
+| 쿼리 | 설명 |
+|------|------|
+| `page` / `limit` | |
+| `date` | `YYYY-MM` (선택) |
+| `kind` | `price_edit` 등 (BE 스펙에 따름) |
+
+**응답 항목 예시**
+
+```jsonc
+{
+  "id": "prh-001",
+  "atIso": "2026-06-04T12:00:00Z",
+  "price": 15000,
+  "source": "purchase",              // product_register | manual_edit | purchase
+  "reason": "매입 반영 (도매몰A)"
 }
 ```
 
@@ -806,11 +927,64 @@
 
 ---
 
-## 9. 카테고리 관리
+## 9. 출금·입금 계좌
+
+> 화면: 매입(상품·부가·기타) 출금계좌, 수익 입금계좌 — 동일 `/banks` API
+
+| API | 설명 |
+|-----|------|
+| `GET /banks` | 목록 (soft delete 제외) |
+| `POST /banks` | `{ bankName, accountNumber, accountHolder }` |
+| `PATCH /banks/:id` | 동일 필드 수정 |
+| `DELETE /banks/:id` | soft delete |
+
+매입·수익 라인에는 `bankId` + 등록 시점 `bank` 스냅샷 저장. 계좌 삭제 후에도 스냅샷으로 목록 표시 가능.
+
+---
+
+## 10. 판매채널
+
+> 화면: 매출 등록 — 채널 선택·관리
+
+| API | 설명 |
+|-----|------|
+| `GET /sales-channels` | 목록 (soft delete 제외) |
+| `POST /sales-channels` | `{ name }` |
+| `PATCH /sales-channels/:id` | `{ name }` |
+| `DELETE /sales-channels/:id` | soft delete |
+
+매출 주문에는 `channelId` + `channel` 스냅샷 (`{ id, name }`).
+
+---
+
+## 11. 이미지 업로드
+
+> 화면: 상품매입 등록 — 상품 이미지
+
+**`POST /upload`**
+
+- `multipart/form-data`, 필드명 `file`
+- 이미지만 (FE 클라이언트 검증: 10MB 이하)
+- 응답 `data.url`을 매입 `imageUrl`·상품 `imageUrl`에 사용 (R2 등 객체 스토리지)
+
+```jsonc
+{
+  "data": {
+    "url": "https://...",
+    "key": "products/...",
+    "contentType": "image/jpeg",
+    "size": 12345
+  }
+}
+```
+
+---
+
+## 12. 카테고리 관리
 
 > 화면: 상품 등록/편집 모달 내 카테고리 선택 → 관리 모달
 
-### 9-1. 카테고리 목록
+### 12-1. 카테고리 목록
 
 **`GET /categories`**
 
@@ -828,7 +1002,7 @@
 
 ---
 
-### 9-2. 카테고리 등록
+### 12-2. 카테고리 등록
 
 **`POST /categories`**
 
@@ -838,7 +1012,7 @@
 
 ---
 
-### 9-3. 카테고리 수정
+### 12-3. 카테고리 수정
 
 **`PATCH /categories/:id`**
 
@@ -848,7 +1022,7 @@
 
 ---
 
-### 9-4. 카테고리 삭제
+### 12-4. 카테고리 삭제
 
 **`DELETE /categories/:id`**
 
@@ -869,21 +1043,29 @@
 | `status` | `"normal"` \| `"cancelled"` | 매출 주문 상태 |
 | `source` (stockHistory) | `"purchase"` \| `"sale"` \| `"manual_adjust"` | |
 | `source` (priceHistory) | `"product_register"` \| `"manual_edit"` \| `"purchase"` | |
-| `channel` | `string?` | 판매채널 (null 가능) |
+| `channelId` | `string?` | 매출 판매채널 FK |
+| `channel` | `{ id, name }?` | 등록 시점 스냅샷 |
+| `bankId` | `string?` | 매입·수익 라인 출금/입금 계좌 FK |
+| `bank` | `BankSummary?` | 계좌 스냅샷 |
 
 ---
 
-## 부록 B. FE → BE 상태 전환 요약
+## 부록 B. FE 연동 현황 (2026-06)
 
-| 퍼블 (FE only) | BE 연동 후 |
-|----------------|-----------|
-| localStorage 상품 저장 | `GET/POST/PATCH/DELETE /products` |
-| 시드 데이터로 목록 표시 | API 응답으로 교체 |
-| 전역 검색: 시드+localStorage | `GET /ledger/search` |
-| 재고반영: FE에서 localStorage 갱신 | `POST /purchase/products/:id/stock-reflect` → BE 원자 처리 |
-| 정산 추이: 시드 합산 하드코딩 | `GET /ledger/summary` |
-| 매출 재고 차감: FE localStorage | `POST /sales` → BE 원자 처리 |
+| 기능 | API | FE |
+|------|-----|-----|
+| 정산 추이 | `GET /ledger/summary?period=` | ✅ |
+| 월 탭 범위 | `GET /ledger/earliest-month` | ✅ |
+| 매입 3종 | `/purchase/*` | ✅ |
+| 매출 | `/sales`, `/sales-channels` | ✅ |
+| 수익 | `/income`, `/banks` | ✅ |
+| 상품·카테고리·이력 | `/products`, `/categories`, `*-history` | ✅ |
+| 이미지 업로드 | `POST /upload` | ✅ |
+| 인증 | `POST /auth/login`, `/auth/refresh` | ✅ |
+| 전역 검색 | `GET /ledger/search` | ❌ (시드+localStorage) |
+| 엑셀 | `GET /report/export` 등 | ❌ (2차) |
+| 설정(마진·수수료) | 미정의 | ❌ (2차) |
 
 ---
 
-*v1 — FE 퍼블 구현 기준 작성 (2026-06-04)*
+*v2 — FE API 연동 기준 갱신 (2026-06-08)*
