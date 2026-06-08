@@ -1,4 +1,6 @@
-export interface ProductPurchaseLine {
+import type { PurchaseLineBankFields } from "@/types/bank-account";
+
+export interface ProductPurchaseLine extends PurchaseLineBankFields {
   id: string;
   paymentDate: string;
   orderNo: string;
@@ -24,6 +26,7 @@ export interface ProductPurchaseLineInput {
   quantity: string;
   paymentAmount: string;
   memo: string;
+  bankId: string;
 }
 
 /** @param paymentDate 미지정 시 호출 측에서 `todayIso()` 등 오늘 날짜를 넘깁니다 */
@@ -40,5 +43,6 @@ export function createEmptyProductPurchaseInput(
     quantity: "",
     paymentAmount: "",
     memo: "",
+    bankId: "",
   };
 }

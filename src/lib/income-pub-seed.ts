@@ -8,6 +8,8 @@ export function createPubSeedIncomeLines(today: string): IncomeDepositLine[] {
       itemName: "네이버 정산",
       amount: 120000,
       memo: "퍼블 샘플 입금",
+      bankId: null,
+      bank: null,
     },
   ];
 }

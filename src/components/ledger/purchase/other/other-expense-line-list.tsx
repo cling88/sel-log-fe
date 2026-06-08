@@ -13,11 +13,12 @@ import {
   purchaseTableShellClass,
 } from "@/components/ledger/purchase/purchase-ui";
 import { formatAmount } from "@/lib/purchase-product-calc";
+import { formatPurchaseLineBankLabel } from "@/lib/purchase-bank-display";
 import type { OtherExpenseLine } from "@/types/purchase-other";
 import { cn } from "@/lib/utils";
 
 const DESKTOP_GRID_CLASS =
-  "grid w-full min-w-[680px] items-center grid-cols-[minmax(56px,72px)_minmax(180px,2fr)_minmax(104px,120px)_minmax(120px,1.4fr)]";
+  "grid w-full min-w-[820px] items-center grid-cols-[minmax(56px,72px)_minmax(180px,2fr)_minmax(104px,120px)_minmax(120px,1.2fr)_minmax(120px,1.4fr)]";
 
 interface OtherExpenseLineListProps {
   lines: OtherExpenseLine[];
@@ -35,6 +36,9 @@ function DesktopHeader() {
       </div>
       <div className={cn(purchaseTableHeaderCellClass, "justify-end")} role="columnheader">
         금액
+      </div>
+      <div className={purchaseTableHeaderCellClass} role="columnheader">
+        출금계좌
       </div>
       <div className={purchaseTableHeaderCellClass} role="columnheader">
         비고
@@ -76,6 +80,9 @@ function DesktopRow({
       <div className={cn(purchaseTableBodyCellClass, "justify-end tabular-nums")}>
         {formatAmount(line.paymentAmount)}원
       </div>
+      <div className={cn(purchaseTableBodyCellClass, "truncate text-[var(--color-text-secondary)]")}>
+        {formatPurchaseLineBankLabel(line)}
+      </div>
       <div className={cn(purchaseTableBodyCellClass, "text-[var(--color-text-muted)]")}>
         {line.memo || "—"}
       </div>
@@ -96,6 +103,7 @@ function MobileCard({
     { label: "번호", value: index + 1 },
     { label: "항목명", value: line.itemName },
     { label: "금액", value: `${formatAmount(line.paymentAmount)}원` },
+    { label: "출금계좌", value: formatPurchaseLineBankLabel(line) },
     { label: "비고", value: line.memo || "—" },
   ];
 

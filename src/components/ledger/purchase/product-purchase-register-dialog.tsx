@@ -22,7 +22,9 @@ import {
   type ProductPurchaseLineInput,
 } from "@/types/purchase-product";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
+import { useUploadImage } from "@/hooks/use-upload-image";
 import { REGISTER_MODAL_FOOTER_CLASS } from "@/components/ledger/purchase/ledger-register-dialog-classes";
+import { PurchaseBankSelectField } from "@/components/ledger/purchase/purchase-bank-select-field";
 import { Plus, X } from "lucide-react";
 
 interface ProductPurchaseRegisterDialogProps {
@@ -31,11 +33,14 @@ interface ProductPurchaseRegisterDialogProps {
   /** 그룹에서 「내역 추가」 시 해당 날짜. 없으면 오늘 */
   defaultPaymentDate?: string;
   editLine?: ProductPurchaseLine | null;
-  onSave: (line: Omit<ProductPurchaseLine, "id" | "stockReflected">) => void;
+  onSave: (
+    line: Omit<ProductPurchaseLine, "id" | "stockReflected">,
+    options?: { closeAfter?: boolean },
+  ) => void | Promise<void>;
   onUpdate?: (
     lineId: string,
     line: Omit<ProductPurchaseLine, "id" | "stockReflected">,
-  ) => void;
+  ) => void | Promise<void>;
   onDelete?: () => void | Promise<void>;
   canDelete?: boolean;
   deleteDisabledReason?: string;
@@ -52,6 +57,7 @@ function lineToInput(line: ProductPurchaseLine): ProductPurchaseLineInput {
     quantity: String(line.quantity),
     paymentAmount: String(line.paymentAmount),
     memo: line.memo,
+    bankId: line.bankId ?? "",
   };
 }
 
@@ -63,29 +69,55 @@ function resolvePaymentDate(defaultPaymentDate?: string): string {
   return todayIso();
 }
 
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function resolveBankId(raw: string): string | null {
+  const trimmed = raw.trim();
+  return trimmed || null;
+}
+
 function parseForm(
   form: ProductPurchaseLineInput,
+  editLine?: ProductPurchaseLine | null,
 ): Omit<ProductPurchaseLine, "id" | "stockReflected"> | null {
   const productName = form.productName.trim();
   const vendor = form.vendor.trim();
   const paymentDate = form.paymentDate.trim();
-  const quantity = Number(form.quantity);
-  const paymentAmount = Number(form.paymentAmount);
+  const productLink = form.productLink.trim();
+  const quantity = Math.trunc(Number(form.quantity));
+  const paymentAmount = Math.trunc(Number(form.paymentAmount));
 
   if (!paymentDate || !productName || !vendor || quantity <= 0 || paymentAmount < 0) {
     return null;
   }
+  if (productLink && !isHttpUrl(productLink)) {
+    return null;
+  }
+
+  const bankId = resolveBankId(form.bankId);
 
   return {
     paymentDate,
     orderNo: form.orderNo.trim(),
     imageUrl: form.imageUrl.trim(),
     productName,
-    productLink: form.productLink.trim(),
+    productLink,
     vendor,
     quantity,
     paymentAmount,
     memo: form.memo.trim(),
+    bankId,
+    bank:
+      editLine && editLine.bankId === bankId && editLine.bank
+        ? editLine.bank
+        : null,
   };
 }
 
@@ -101,21 +133,46 @@ export function ProductPurchaseRegisterDialog({
   deleteDisabledReason,
 }: ProductPurchaseRegisterDialogProps) {
   const { alert } = useAppDialog();
+  const uploadImage = useUploadImage();
   const isEdit = editLine != null;
+  const readOnly = Boolean(editLine?.stockReflected);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<ProductPurchaseLineInput>(() =>
     createEmptyProductPurchaseInput(resolvePaymentDate(defaultPaymentDate)),
   );
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const formSessionRef = useRef<string | null>(null);
+
+  const revokePreviewUrl = (url: string) => {
+    if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+  };
 
   const resetForm = (paymentDate?: string) => {
+    setPreviewUrl((prev) => {
+      revokePreviewUrl(prev);
+      return "";
+    });
+    setPendingImageFile(null);
     setForm(createEmptyProductPurchaseInput(resolvePaymentDate(paymentDate)));
     setError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      formSessionRef.current = null;
+      return;
+    }
+
+    const sessionKey = editLine
+      ? `edit:${editLine.id}`
+      : `new:${defaultPaymentDate ?? ""}`;
+    if (formSessionRef.current === sessionKey) return;
+    formSessionRef.current = sessionKey;
+
     if (editLine) {
       setForm(lineToInput(editLine));
       setError(null);
@@ -130,6 +187,11 @@ export function ProductPurchaseRegisterDialog({
   };
 
   const clearImage = () => {
+    setPreviewUrl((prev) => {
+      revokePreviewUrl(prev);
+      return "";
+    });
+    setPendingImageFile(null);
     patch({ imageUrl: "" });
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -143,14 +205,13 @@ export function ProductPurchaseRegisterDialog({
       setError("이미지 파일만 업로드할 수 있습니다.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      patch({ imageUrl: result });
-      setError(null);
-    };
-    reader.onerror = () => setError("이미지를 불러오지 못했습니다.");
-    reader.readAsDataURL(file);
+    setPreviewUrl((prev) => {
+      revokePreviewUrl(prev);
+      return URL.createObjectURL(file);
+    });
+    setPendingImageFile(file);
+    patch({ imageUrl: "" });
+    setError(null);
   };
 
   const handleDelete = async () => {
@@ -165,25 +226,44 @@ export function ProductPurchaseRegisterDialog({
   };
 
   const submit = async (closeAfter: boolean) => {
-    const parsed = parseForm(form);
+    if (readOnly) return;
+
+    const productLink = form.productLink.trim();
+    if (productLink && !isHttpUrl(productLink)) {
+      setError("상품 상세 링크는 http:// 또는 https:// 로 시작해야 합니다.");
+      return;
+    }
+
+    const parsed = parseForm(form, editLine);
     if (!parsed) {
       setError("결제날짜, 상품명, 구매처, 수량, 결제금액을 확인해 주세요.");
       return;
     }
-    if (isEdit && editLine && onUpdate) {
-      onUpdate(editLine.id, parsed);
-      await alert("수정되었습니다.");
-      onOpenChange(false);
-      return;
+
+    setSubmitting(true);
+    try {
+      let imageUrl = parsed.imageUrl;
+      if (pendingImageFile) {
+        const uploaded = await uploadImage.mutateAsync(pendingImageFile);
+        imageUrl = uploaded.url;
+      }
+
+      const payload = { ...parsed, imageUrl };
+      if (isEdit && editLine && onUpdate) {
+        await Promise.resolve(onUpdate(editLine.id, payload));
+        return;
+      }
+      await Promise.resolve(onSave(payload, { closeAfter }));
+      if (!closeAfter) {
+        formSessionRef.current = `new:${payload.paymentDate}`;
+        resetForm(payload.paymentDate);
+      }
+    } finally {
+      setSubmitting(false);
     }
-    onSave(parsed);
-    await alert("등록되었습니다.");
-    if (closeAfter) {
-      onOpenChange(false);
-      return;
-    }
-    resetForm(parsed.paymentDate);
   };
+
+  const displayImageUrl = previewUrl || form.imageUrl;
 
   const qty = Number(form.quantity);
   const amount = Number(form.paymentAmount);
@@ -198,13 +278,20 @@ export function ProductPurchaseRegisterDialog({
         <DialogHeader className="border-b border-[var(--color-border)] px-5 py-4">
           <DialogTitle>{isEdit ? "상품 매입 상세" : "상품 매입 등록"}</DialogTitle>
           <DialogDescription>
-            {isEdit
-              ? "내역을 확인·수정하거나 삭제할 수 있습니다."
-              : "한 건씩 저장하면 같은 결제날짜끼리 목록에서 자동으로 묶여 보입니다."}
+            {readOnly
+              ? "재고 반영된 내역은 조회만 가능합니다. 수정하려면 목록에서 반영을 취소해 주세요."
+              : isEdit
+                ? "내역을 확인·수정하거나 삭제할 수 있습니다."
+                : "한 건씩 저장하면 같은 결제날짜끼리 목록에서 자동으로 묶여 보입니다."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {readOnly ? (
+            <p className="mb-4 rounded-lg border border-[var(--color-warning)]/40 bg-amber-50 px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+              재고 반영 완료된 내역은 수정·삭제할 수 없습니다.
+            </p>
+          ) : null}
           {error ? (
             <p className="mb-4 rounded-lg border border-[var(--color-danger)]/30 bg-red-50 px-3 py-2 text-sm text-[var(--color-danger)]">
               {error}
@@ -220,12 +307,23 @@ export function ProductPurchaseRegisterDialog({
                 id="pp-date"
                 type="date"
                 value={form.paymentDate || todayIso()}
+                disabled={readOnly}
                 onChange={(e) => patch({ paymentDate: e.target.value })}
               />
               <p className="text-xs text-[var(--color-text-muted)]">
                 기본값: 오늘 ({formatDisplayDate(displayDate)})
               </p>
             </div>
+
+            <PurchaseBankSelectField
+              className="sm:col-span-2"
+              bankId={resolveBankId(form.bankId)}
+              bankSnapshot={editLine?.bank}
+              disabled={readOnly}
+              onBankIdChange={(id) =>
+                patch({ bankId: id ?? "" })
+              }
+            />
 
             <div className="space-y-1.5">
               <Label htmlFor="pp-vendor">
@@ -234,6 +332,7 @@ export function ProductPurchaseRegisterDialog({
               <Input
                 id="pp-vendor"
                 value={form.vendor}
+                disabled={readOnly}
                 onChange={(e) => patch({ vendor: e.target.value })}
                 placeholder="도매처명"
               />
@@ -244,6 +343,7 @@ export function ProductPurchaseRegisterDialog({
               <Input
                 id="pp-order-no"
                 value={form.orderNo}
+                disabled={readOnly}
                 onChange={(e) => patch({ orderNo: e.target.value })}
                 placeholder="선택"
               />
@@ -256,6 +356,7 @@ export function ProductPurchaseRegisterDialog({
               <Input
                 id="pp-name"
                 value={form.productName}
+                disabled={readOnly}
                 onChange={(e) => patch({ productName: e.target.value })}
               />
             </div>
@@ -265,6 +366,7 @@ export function ProductPurchaseRegisterDialog({
               <Input
                 id="pp-link"
                 value={form.productLink}
+                disabled={readOnly}
                 onChange={(e) => patch({ productLink: e.target.value })}
                 placeholder="https://"
               />
@@ -279,6 +381,7 @@ export function ProductPurchaseRegisterDialog({
                 type="number"
                 min={1}
                 value={form.quantity}
+                disabled={readOnly}
                 onChange={(e) => patch({ quantity: e.target.value })}
               />
             </div>
@@ -292,6 +395,7 @@ export function ProductPurchaseRegisterDialog({
                 type="number"
                 min={0}
                 value={form.paymentAmount}
+                disabled={readOnly}
                 onChange={(e) => patch({ paymentAmount: e.target.value })}
               />
             </div>
@@ -314,7 +418,7 @@ export function ProductPurchaseRegisterDialog({
                 className="sr-only"
                 onChange={handleImageChange}
               />
-              {form.imageUrl ? (
+              {displayImageUrl ? (
                 <div
                   className={cn(
                     "relative size-24 shrink-0 overflow-hidden rounded-lg",
@@ -323,23 +427,35 @@ export function ProductPurchaseRegisterDialog({
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={form.imageUrl}
+                    src={displayImageUrl}
                     alt="상품 미리보기"
                     className="size-full object-cover"
                   />
                   <button
                     type="button"
                     onClick={clearImage}
+                    disabled={readOnly}
                     className={cn(
                       "absolute top-1 right-1 flex size-6 items-center justify-center",
                       "rounded-full border border-[var(--color-border)] bg-white/95 shadow-sm",
                       "text-[var(--color-text-secondary)] transition-colors",
                       "hover:bg-white hover:text-[var(--color-text-primary)]",
+                      readOnly && "hidden",
                     )}
                     aria-label="이미지 삭제"
                   >
                     <X className="size-3.5" />
                   </button>
+                </div>
+              ) : readOnly ? (
+                <div
+                  className={cn(
+                    "flex size-24 shrink-0 items-center justify-center rounded-lg",
+                    "border border-dashed border-[var(--color-border)]",
+                    "bg-[var(--color-bg)] text-xs text-[var(--color-text-muted)]",
+                  )}
+                >
+                  없음
                 </div>
               ) : (
                 <button
@@ -365,6 +481,7 @@ export function ProductPurchaseRegisterDialog({
                 id="pp-memo"
                 rows={4}
                 value={form.memo}
+                disabled={readOnly}
                 onChange={(e) => patch({ memo: e.target.value })}
                 placeholder="메모, 특이사항 등"
                 className="min-h-[6.5rem] resize-y"
@@ -379,7 +496,7 @@ export function ProductPurchaseRegisterDialog({
             isEdit && onDelete && "sm:justify-between",
           )}
         >
-          {isEdit && onDelete ? (
+          {isEdit && onDelete && !readOnly ? (
             <Button
               type="button"
               variant="outline"
@@ -392,27 +509,28 @@ export function ProductPurchaseRegisterDialog({
             <span />
           )}
           <div className="flex flex-wrap justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              취소
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => onOpenChange(false)}>
+              {readOnly ? "닫기" : "취소"}
             </Button>
-            {isEdit ? (
-              <Button type="button" onClick={() => void submit(true)}>
-                저장
+            {!readOnly && isEdit ? (
+              <Button type="button" disabled={submitting} onClick={() => void submit(true)}>
+                {submitting ? "저장 중…" : "저장"}
               </Button>
-            ) : (
+            ) : !readOnly ? (
               <>
                 <Button
                   type="button"
                   variant="secondary"
+                  disabled={submitting}
                   onClick={() => void submit(false)}
                 >
-                  저장 후 계속 추가
+                  {submitting ? "저장 중…" : "저장 후 계속 추가"}
                 </Button>
-                <Button type="button" onClick={() => void submit(true)}>
-                  저장하고 닫기
+                <Button type="button" disabled={submitting} onClick={() => void submit(true)}>
+                  {submitting ? "저장 중…" : "저장하고 닫기"}
                 </Button>
               </>
-            )}
+            ) : null}
           </div>
         </DialogFooter>
       </DialogContent>

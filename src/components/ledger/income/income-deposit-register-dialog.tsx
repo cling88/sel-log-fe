@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,9 +13,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { REGISTER_MODAL_FOOTER_CLASS } from "@/components/ledger/purchase/ledger-register-dialog-classes";
+import { PurchaseBankSelectField } from "@/components/ledger/purchase/purchase-bank-select-field";
+import { useBanks } from "@/hooks/use-banks";
 import { formatDisplayDate, todayIso } from "@/lib/date";
+import type { BankSummary } from "@/types/bank-account";
 import {
   createEmptyIncomeDepositInput,
   type IncomeDepositLine,
@@ -28,8 +30,14 @@ interface IncomeDepositRegisterDialogProps {
   onOpenChange: (open: boolean) => void;
   defaultDepositDate?: string;
   editLine?: IncomeDepositLine | null;
-  onSave: (line: Omit<IncomeDepositLine, "id">) => void;
-  onUpdate?: (lineId: string, line: Omit<IncomeDepositLine, "id">) => void;
+  onSave: (
+    line: Omit<IncomeDepositLine, "id">,
+    options?: { closeAfter?: boolean },
+  ) => void | Promise<void>;
+  onUpdate?: (
+    lineId: string,
+    line: Omit<IncomeDepositLine, "id">,
+  ) => void | Promise<void>;
   onDelete?: () => void | Promise<void>;
 }
 
@@ -42,7 +50,13 @@ function lineToInput(line: IncomeDepositLine): IncomeDepositLineInput {
     commissionAmount:
       line.commissionAmount != null ? String(line.commissionAmount) : "",
     memo: line.memo,
+    bankId: line.bankId ?? "",
   };
+}
+
+function resolveBankId(raw: string): string | null {
+  const trimmed = raw.trim();
+  return trimmed || null;
 }
 
 function resolveDepositDate(defaultDepositDate?: string): string {
@@ -53,7 +67,11 @@ function resolveDepositDate(defaultDepositDate?: string): string {
   return todayIso();
 }
 
-function parseForm(form: IncomeDepositLineInput): Omit<IncomeDepositLine, "id"> | null {
+function parseForm(
+  form: IncomeDepositLineInput,
+  editLine?: IncomeDepositLine | null,
+  selectedBank?: BankSummary | null,
+): Omit<IncomeDepositLine, "id"> | null {
   const itemName = form.itemName.trim();
   const depositDate = form.depositDate.trim();
   const amount = Number(form.amount);
@@ -69,6 +87,8 @@ function parseForm(form: IncomeDepositLineInput): Omit<IncomeDepositLine, "id"> 
       ? Math.max(0, Number(form.commissionAmount) || 0)
       : undefined;
 
+  const bankId = resolveBankId(form.bankId);
+
   return {
     depositDate,
     itemName,
@@ -76,6 +96,12 @@ function parseForm(form: IncomeDepositLineInput): Omit<IncomeDepositLine, "id"> 
     ...(vatAmount != null ? { vatAmount } : {}),
     ...(commissionAmount != null ? { commissionAmount } : {}),
     memo: form.memo.trim(),
+    bankId,
+    bank:
+      selectedBank ??
+      (editLine && editLine.bankId === bankId && editLine.bank
+        ? editLine.bank
+        : null),
   };
 }
 
@@ -88,12 +114,14 @@ export function IncomeDepositRegisterDialog({
   onUpdate,
   onDelete,
 }: IncomeDepositRegisterDialogProps) {
-  const { alert } = useAppDialog();
+  const { banks } = useBanks();
   const isEdit = editLine != null;
   const [form, setForm] = useState<IncomeDepositLineInput>(() =>
     createEmptyIncomeDepositInput(resolveDepositDate(defaultDepositDate)),
   );
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const formSessionRef = useRef<string | null>(null);
 
   const resetForm = (depositDate?: string) => {
     setForm(createEmptyIncomeDepositInput(resolveDepositDate(depositDate)));
@@ -101,7 +129,17 @@ export function IncomeDepositRegisterDialog({
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      formSessionRef.current = null;
+      return;
+    }
+
+    const sessionKey = editLine
+      ? `edit:${editLine.id}`
+      : `new:${defaultDepositDate ?? ""}`;
+    if (formSessionRef.current === sessionKey) return;
+    formSessionRef.current = sessionKey;
+
     if (editLine) {
       setForm(lineToInput(editLine));
       setError(null);
@@ -121,24 +159,30 @@ export function IncomeDepositRegisterDialog({
   };
 
   const submit = async (closeAfter: boolean) => {
-    const parsed = parseForm(form);
+    const bankId = resolveBankId(form.bankId);
+    const selectedBank = bankId
+      ? (banks.find((bank) => bank.id === bankId) ?? null)
+      : null;
+    const parsed = parseForm(form, editLine, selectedBank);
     if (!parsed) {
       setError("입금일, 항목명, 금액을 확인해 주세요.");
       return;
     }
-    if (isEdit && editLine && onUpdate) {
-      onUpdate(editLine.id, parsed);
-      await alert("수정되었습니다.");
-      onOpenChange(false);
-      return;
+
+    setSubmitting(true);
+    try {
+      if (isEdit && editLine && onUpdate) {
+        await Promise.resolve(onUpdate(editLine.id, parsed));
+        return;
+      }
+      await Promise.resolve(onSave(parsed, { closeAfter }));
+      if (!closeAfter) {
+        formSessionRef.current = `new:${parsed.depositDate}`;
+        resetForm(parsed.depositDate);
+      }
+    } finally {
+      setSubmitting(false);
     }
-    onSave(parsed);
-    await alert("등록되었습니다.");
-    if (closeAfter) {
-      onOpenChange(false);
-      return;
-    }
-    resetForm(parsed.depositDate);
   };
 
   const displayDate = form.depositDate || todayIso();
@@ -177,6 +221,13 @@ export function IncomeDepositRegisterDialog({
                 기본값: 오늘 ({formatDisplayDate(displayDate)})
               </p>
             </div>
+
+            <PurchaseBankSelectField
+              bankId={resolveBankId(form.bankId)}
+              bankSnapshot={editLine?.bank}
+              fieldLabel="입금계좌"
+              onBankIdChange={(id) => patch({ bankId: id ?? "" })}
+            />
 
             <div className="space-y-1.5">
               <Label htmlFor="inc-name">
@@ -263,20 +314,21 @@ export function IncomeDepositRegisterDialog({
               취소
             </Button>
             {isEdit ? (
-              <Button type="button" onClick={() => void submit(true)}>
-                저장
+              <Button type="button" disabled={submitting} onClick={() => void submit(true)}>
+                {submitting ? "저장 중…" : "저장"}
               </Button>
             ) : (
               <>
                 <Button
                   type="button"
                   variant="secondary"
+                  disabled={submitting}
                   onClick={() => void submit(false)}
                 >
-                  저장 후 계속 추가
+                  {submitting ? "저장 중…" : "저장 후 계속 추가"}
                 </Button>
-                <Button type="button" onClick={() => void submit(true)}>
-                  저장하고 닫기
+                <Button type="button" disabled={submitting} onClick={() => void submit(true)}>
+                  {submitting ? "저장 중…" : "저장하고 닫기"}
                 </Button>
               </>
             )}

@@ -3,19 +3,13 @@
 import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LedgerYearPicker } from "@/components/ledger/ledger-year-picker";
+import { useLedgerSummary } from "@/hooks/use-ledger-summary";
+import { getLedgerErrorMessage } from "@/lib/api/ledger";
 import { isMonthScopedLedgerTab } from "@/lib/ledger-period";
+import { formatAmount } from "@/lib/purchase-product-calc";
 import { cn } from "@/lib/utils";
 import type { LedgerTabId, PeriodPreset } from "@/types/common";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import {
-  PUB_SEED_OTHER_LINES,
-  PUB_SEED_PRODUCT_LINES,
-  PUB_SEED_SUPPLY_LINES,
-} from "@/lib/purchase-pub-seed";
-import { createPubSeedSaleOrders } from "@/lib/sale-pub-seed";
-import { createPubSeedIncomeLines } from "@/lib/income-pub-seed";
-import { todayIso } from "@/lib/date";
-import { formatAmount } from "@/lib/purchase-product-calc";
 
 const periodPresets: { id: PeriodPreset; label: string }[] = [
   { id: "all", label: "전체" },
@@ -41,6 +35,17 @@ function isLedgerTab(value: string | null): value is LedgerTabId {
   );
 }
 
+function formatSummaryAmount(value: number | undefined, loading: boolean) {
+  if (loading || value == null) return "—";
+  return `${formatAmount(value)}원`;
+}
+
+function formatNetTotal(value: number | undefined, loading: boolean) {
+  if (loading || value == null) return "—";
+  const prefix = value < 0 ? "-" : "";
+  return `${prefix}${formatAmount(Math.abs(value))}원`;
+}
+
 export function LedgerHeader() {
   const router = useRouter();
   const pathname = usePathname();
@@ -48,27 +53,24 @@ export function LedgerHeader() {
   const tabParam = searchParams.get("tab");
   const activeTab: LedgerTabId = isLedgerTab(tabParam) ? tabParam : "purchase";
   const [trendExpanded, setTrendExpanded] = useState(true);
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodPreset>("today");
 
-  // 정산 추이: 각 탭 데이터 전체 최종값 합산 (퍼블 시드 기준)
-  const purchaseTotal =
-    PUB_SEED_PRODUCT_LINES.reduce((s, l) => s + l.paymentAmount, 0) +
-    PUB_SEED_SUPPLY_LINES.reduce((s, l) => s + l.paymentAmount, 0);
-  const purchaseCount = PUB_SEED_PRODUCT_LINES.length + PUB_SEED_SUPPLY_LINES.length;
+  const {
+    data: summary,
+    isLoading: summaryLoading,
+    isError: summaryError,
+    error: summaryErrorValue,
+  } = useLedgerSummary(selectedPeriod);
 
-  const seedSaleOrders = createPubSeedSaleOrders(todayIso());
-  const normalSaleOrders = seedSaleOrders.filter((o) => o.status === "normal");
-  const saleTotal = normalSaleOrders.reduce((s, o) => s + o.totalAmount, 0);
-  const saleCount = normalSaleOrders.length;
-
-  const seedIncomeLines = createPubSeedIncomeLines(todayIso());
-  const incomeTotal = seedIncomeLines.reduce((s, l) => s + l.amount, 0);
-  const incomeCount = seedIncomeLines.length;
-
-  const cumulativeOtherExpense = PUB_SEED_OTHER_LINES.reduce(
-    (sum, line) => sum + line.paymentAmount,
-    0,
-  );
-  const totalAfterOtherExpense = incomeTotal - cumulativeOtherExpense;
+  const purchaseTotal = summary?.purchase.total ?? 0;
+  const purchaseCount = summary?.purchase.count ?? 0;
+  const saleTotal = summary?.sale.normalTotal ?? 0;
+  const saleCount = summary?.sale.normalCount ?? 0;
+  const incomeTotal = summary?.income.total ?? 0;
+  const incomeCount = summary?.income.count ?? 0;
+  const cumulativeOtherExpense = summary?.otherExpense.total ?? 0;
+  const netTotal = summary?.netTotal ?? 0;
+  const summaryPending = summaryLoading && !summary;
 
   const setTab = (tab: LedgerTabId) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -99,32 +101,48 @@ export function LedgerHeader() {
             <ChevronUp className="size-5" />
           </button>
           <div className="flex flex-wrap gap-2">
-            {periodPresets.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white"
-              >
-                {preset.label}
-              </button>
-            ))}
+            {periodPresets.map((preset) => {
+              const active = preset.id === selectedPeriod;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => setSelectedPeriod(preset.id)}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-white/20 text-white"
+                      : "text-white/70 hover:bg-white/10 hover:text-white",
+                  )}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
           </div>
+          {summaryError ? (
+            <p className="mt-3 text-xs text-red-200">
+              {getLedgerErrorMessage(summaryErrorValue)}
+            </p>
+          ) : null}
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {[
               {
                 label: "매입",
-                subLabel: `상품+공급비 ${purchaseCount}건`,
-                amount: purchaseTotal,
+                subLabel: summaryPending
+                  ? "—"
+                  : `상품+공급비 ${purchaseCount}건`,
+                amount: formatSummaryAmount(purchaseTotal, summaryPending),
               },
               {
                 label: "매출 (정상)",
-                subLabel: `${saleCount}건`,
-                amount: saleTotal,
+                subLabel: summaryPending ? "—" : `${saleCount}건`,
+                amount: formatSummaryAmount(saleTotal, summaryPending),
               },
               {
                 label: "수익 (입금)",
-                subLabel: `${incomeCount}건`,
-                amount: incomeTotal,
+                subLabel: summaryPending ? "—" : `${incomeCount}건`,
+                amount: formatSummaryAmount(incomeTotal, summaryPending),
               },
             ].map((item) => (
               <div
@@ -133,7 +151,7 @@ export function LedgerHeader() {
               >
                 <p className="text-xs text-white/70">{item.label}</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums">
-                  {formatAmount(item.amount)}원
+                  {item.amount}
                 </p>
                 <p className="mt-0.5 text-xs text-white/60">{item.subLabel}</p>
               </div>
@@ -143,20 +161,19 @@ export function LedgerHeader() {
             <p>
               수익 입금{" "}
               <span className="font-semibold text-white">
-                {formatAmount(incomeTotal)}원
+                {formatSummaryAmount(incomeTotal, summaryPending)}
               </span>
             </p>
             <p>
               - 누적 기타지출{" "}
               <span className="font-semibold text-white">
-                {formatAmount(cumulativeOtherExpense)}원
+                {formatSummaryAmount(cumulativeOtherExpense, summaryPending)}
               </span>
             </p>
             <p>
               = 총{" "}
               <span className="font-semibold text-white">
-                {totalAfterOtherExpense >= 0 ? "" : "-"}
-                {formatAmount(Math.abs(totalAfterOtherExpense))}원
+                {formatNetTotal(netTotal, summaryPending)}
               </span>
             </p>
           </div>

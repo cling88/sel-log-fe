@@ -13,11 +13,12 @@ import {
   purchaseTableShellClass,
 } from "@/components/ledger/purchase/purchase-ui";
 import { formatAmount } from "@/lib/purchase-product-calc";
+import { formatPurchaseLineBankLabel } from "@/lib/purchase-bank-display";
 import type { IncomeDepositLine } from "@/types/income";
 import { cn } from "@/lib/utils";
 
 const DESKTOP_GRID_CLASS =
-  "grid w-full min-w-[760px] items-center grid-cols-[minmax(56px,72px)_minmax(160px,2fr)_minmax(96px,110px)_minmax(88px,100px)_minmax(88px,100px)_minmax(100px,1.2fr)]";
+  "grid w-full min-w-[920px] items-center grid-cols-[minmax(56px,72px)_minmax(140px,1.6fr)_minmax(96px,110px)_minmax(140px,1.4fr)_minmax(80px,96px)_minmax(80px,96px)_minmax(100px,1.2fr)]";
 
 interface IncomeDepositLineListProps {
   lines: IncomeDepositLine[];
@@ -35,6 +36,9 @@ function DesktopHeader() {
       </div>
       <div className={cn(purchaseTableHeaderCellClass, "justify-end")} role="columnheader">
         금액
+      </div>
+      <div className={purchaseTableHeaderCellClass} role="columnheader">
+        입금계좌
       </div>
       <div className={cn(purchaseTableHeaderCellClass, "justify-end")} role="columnheader">
         부가세
@@ -90,6 +94,14 @@ function DesktopRow({
       <div
         className={cn(
           purchaseTableBodyCellClass,
+          "truncate text-[var(--color-text-secondary)]",
+        )}
+      >
+        {formatPurchaseLineBankLabel(line, "삭제된 입금계좌")}
+      </div>
+      <div
+        className={cn(
+          purchaseTableBodyCellClass,
           "justify-end tabular-nums text-[var(--color-text-muted)]",
         )}
       >
@@ -129,6 +141,10 @@ function MobileCard({
           +{formatAmount(line.amount)}원
         </span>
       ),
+    },
+    {
+      label: "입금계좌",
+      value: formatPurchaseLineBankLabel(line, "삭제된 입금계좌"),
     },
     ...(line.vatAmount != null
       ? [{ label: "부가세", value: `${formatAmount(line.vatAmount)}원` }]

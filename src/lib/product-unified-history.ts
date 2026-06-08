@@ -19,6 +19,18 @@ export type UnifiedHistoryEntry =
       data: InventoryPriceHistoryItem;
     };
 
+export type ProductHistoryFilterId = "all" | "purchase" | "sale" | "price_edit";
+
+export const PRODUCT_HISTORY_FILTER_TABS: {
+  id: ProductHistoryFilterId;
+  label: string;
+}[] = [
+  { id: "all", label: "전체" },
+  { id: "purchase", label: "매입" },
+  { id: "sale", label: "판매" },
+  { id: "price_edit", label: "가격수정" },
+];
+
 export function resolveStockHistorySource(h: InventoryStockHistoryItem) {
   if (h.source) return h.source;
   if (h.vendor || h.orderNo || h.unitPrice || h.totalAmount) return "purchase";

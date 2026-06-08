@@ -1,13 +1,6 @@
-export type SaleOrderStatus = "normal" | "cancelled";
+import type { SalesChannelSummary } from "@/types/sale-channel";
 
-export const SALE_CHANNELS = [
-  "스마트스토어",
-  "쿠팡",
-  "카카오쇼핑",
-  "자체몰",
-  "오프라인",
-  "기타",
-] as const;
+export type SaleOrderStatus = "normal" | "cancelled";
 
 export interface SaleOrderItem {
   productId: string;
@@ -28,7 +21,8 @@ export interface SaleOrder {
   orderDate: string;
   orderNo: string;
   customerName: string;
-  channel?: string;
+  channelId: string | null;
+  channel: SalesChannelSummary | null;
   items: SaleOrderItem[];
   extraAdjustments: SaleOrderAdjustment[];
   discountAdjustments: SaleOrderAdjustment[];

@@ -1,12 +1,14 @@
-export interface IncomeDepositLine {
+import type { PurchaseLineBankFields } from "@/types/bank-account";
+
+export interface IncomeDepositLine extends PurchaseLineBankFields {
   id: string;
   depositDate: string;
   itemName: string;
   amount: number;
   /** 부가세 (정보용) */
-  vatAmount?: number;
+  vatAmount?: number | null;
   /** 플랫폼 수수료 (정보용) */
-  commissionAmount?: number;
+  commissionAmount?: number | null;
   memo: string;
 }
 
@@ -17,6 +19,7 @@ export interface IncomeDepositLineInput {
   vatAmount: string;
   commissionAmount: string;
   memo: string;
+  bankId: string;
 }
 
 export function createEmptyIncomeDepositInput(
@@ -29,5 +32,6 @@ export function createEmptyIncomeDepositInput(
     vatAmount: "",
     commissionAmount: "",
     memo: "",
+    bankId: "",
   };
 }

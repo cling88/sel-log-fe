@@ -13,6 +13,7 @@ import {
   formatAmount,
   formatRecommendedPriceRange,
 } from "@/lib/purchase-product-calc";
+import { formatPurchaseLineBankLabel } from "@/lib/purchase-bank-display";
 import type { ProductPurchaseLine } from "@/types/purchase-product";
 import {
   purchasePrimaryActionClass,
@@ -24,7 +25,7 @@ import { cn } from "@/lib/utils";
 
 /** 열 너비 고정 — 헤더·본문이 동일 grid를 공유해야 정렬됨 */
 const PRODUCT_TABLE_GRID_CLASS =
-  "grid w-full min-w-[1240px] grid-cols-[64px_108px_58px_minmax(160px,1.2fr)_96px_56px_96px_88px_88px_112px_minmax(128px,max-content)_minmax(80px,1fr)]";
+  "grid w-full min-w-[1360px] grid-cols-[64px_108px_58px_minmax(160px,1.2fr)_96px_56px_96px_88px_88px_112px_minmax(128px,max-content)_minmax(120px,1fr)_minmax(80px,1fr)]";
 
 const cellBase = "flex items-center px-2.5 text-xs leading-snug";
 
@@ -217,6 +218,9 @@ function DesktopHeader() {
       </div>
       <div className={headerCellClass} role="columnheader">
         재고
+      </div>
+      <div className={headerCellClass} role="columnheader">
+        출금계좌
       </div>
       <div className={headerCellClass} role="columnheader">
         비고
@@ -417,6 +421,18 @@ function DesktopRow({
           groupDisabled,
           rowBg,
           rowBorder,
+          cn(truncateCellClass, "text-[var(--color-text-secondary)]"),
+        )}
+      >
+        <TruncatedText value={formatPurchaseLineBankLabel(line)} />
+      </div>
+      <div
+        {...clickableCellProps(
+          line.id,
+          onLineClick,
+          groupDisabled,
+          rowBg,
+          rowBorder,
           cn(truncateCellClass, "text-[var(--color-text-muted)]"),
         )}
       >
@@ -477,6 +493,7 @@ function MobileCard({
       label: "추천판매가",
       value: formatRecommendedPriceRange(unitPrice, finalUnit),
     },
+    { label: "출금계좌", value: formatPurchaseLineBankLabel(line) },
     { label: "비고", value: line.memo || "—" },
   ];
 

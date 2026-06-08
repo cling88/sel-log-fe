@@ -16,11 +16,12 @@ import {
   purchaseTableShellClass,
 } from "@/components/ledger/purchase/purchase-ui";
 import { formatAmount } from "@/lib/purchase-product-calc";
+import { formatPurchaseLineBankLabel } from "@/lib/purchase-bank-display";
 import type { SupplyExpenseLine } from "@/types/purchase-supply";
 import { cn } from "@/lib/utils";
 
 const DESKTOP_GRID_CLASS =
-  "grid w-full min-w-[860px] items-center grid-cols-[minmax(56px,72px)_minmax(160px,1.6fr)_minmax(100px,1fr)_minmax(56px,64px)_minmax(96px,104px)_minmax(128px,auto)_minmax(88px,1fr)]";
+  "grid w-full min-w-[1000px] items-center grid-cols-[minmax(56px,72px)_minmax(160px,1.6fr)_minmax(100px,1fr)_minmax(56px,64px)_minmax(96px,104px)_minmax(128px,auto)_minmax(120px,1fr)_minmax(88px,1fr)]";
 
 interface SupplyExpenseLineListProps {
   lines: SupplyExpenseLine[];
@@ -91,6 +92,9 @@ function DesktopHeader() {
         재고
       </div>
       <div className={purchaseTableHeaderCellClass} role="columnheader">
+        출금계좌
+      </div>
+      <div className={purchaseTableHeaderCellClass} role="columnheader">
         비고
       </div>
     </div>
@@ -153,6 +157,9 @@ function DesktopRow({
           onCancelStockReflect={onCancelStockReflect}
         />
       </div>
+      <div className={cn(purchaseTableBodyCellClass, "truncate text-[var(--color-text-secondary)]")}>
+        {formatPurchaseLineBankLabel(line)}
+      </div>
       <div className={cn(purchaseTableBodyCellClass, "text-[var(--color-text-muted)]")}>
         {line.memo || "—"}
       </div>
@@ -179,6 +186,7 @@ function MobileCard({
     { label: "구매처", value: line.vendor || "—" },
     { label: "수량", value: `${line.quantity}개` },
     { label: "금액", value: `${formatAmount(line.paymentAmount)}원` },
+    { label: "출금계좌", value: formatPurchaseLineBankLabel(line) },
     { label: "비고", value: line.memo || "—" },
   ];
 

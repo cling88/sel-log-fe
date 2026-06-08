@@ -13,6 +13,8 @@ export function createPubSeedSaleOrders(today: string): SaleOrder[] {
       orderDate: today,
       orderNo: "SO-260604-01",
       customerName: "김민수",
+      channelId: null,
+      channel: null,
       items: [
         {
           productId: SAMPLE_PRODUCT_ID,
@@ -42,6 +44,8 @@ export function createPubSeedSaleOrders(today: string): SaleOrder[] {
       orderDate: monthDay,
       orderNo: "SO-260602-02",
       customerName: "박지영",
+      channelId: null,
+      channel: null,
       items: [
         {
           productId: SAMPLE_PRODUCT_ID,

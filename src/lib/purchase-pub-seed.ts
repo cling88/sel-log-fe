@@ -23,6 +23,8 @@ const yesterday = daysAgoIso(1);
 /** 퍼블 목록용 샘플 상품 이미지 (public/sample-product.jpg) */
 export const PUB_SAMPLE_PRODUCT_IMAGE_URL = "/sample-product.jpg";
 
+const EMPTY_BANK = { bankId: null, bank: null } as const;
+
 export const PUB_SEED_PRODUCT_LINES: ProductPurchaseLine[] = [
   {
     id: "pp-seed-1",
@@ -36,6 +38,7 @@ export const PUB_SEED_PRODUCT_LINES: ProductPurchaseLine[] = [
     paymentAmount: 150000,
     memo: "1차 입고",
     stockReflected: false,
+    ...EMPTY_BANK,
   },
   {
     id: "pp-seed-2",
@@ -49,6 +52,7 @@ export const PUB_SEED_PRODUCT_LINES: ProductPurchaseLine[] = [
     paymentAmount: 42500,
     memo: "",
     stockReflected: true,
+    ...EMPTY_BANK,
   },
 ];
 
@@ -73,6 +77,7 @@ export const PUB_SEED_SUPPLY_LINES: SupplyExpenseLine[] = [
     paymentAmount: 28000,
     memo: "",
     stockReflected: false,
+    ...EMPTY_BANK,
   },
   {
     id: "se-seed-2",
@@ -83,6 +88,7 @@ export const PUB_SEED_SUPPLY_LINES: SupplyExpenseLine[] = [
     paymentAmount: 12000,
     memo: "2롤",
     stockReflected: true,
+    ...EMPTY_BANK,
   },
 ];
 
@@ -93,6 +99,7 @@ export const PUB_SEED_OTHER_LINES: OtherExpenseLine[] = [
     itemName: "사무실 월세",
     paymentAmount: 550000,
     memo: "5월분",
+    ...EMPTY_BANK,
   },
   {
     id: "oe-seed-2",
@@ -100,5 +107,6 @@ export const PUB_SEED_OTHER_LINES: OtherExpenseLine[] = [
     itemName: "세무 기장료",
     paymentAmount: 110000,
     memo: "",
+    ...EMPTY_BANK,
   },
 ];

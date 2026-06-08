@@ -1,8 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useLedgerMonthParam } from "@/hooks/use-ledger-month";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { useLedgerUrlSearch } from "@/hooks/use-ledger-url-search";
+import {
+  getPurchaseErrorMessage,
+  useCreateOtherExpenseLine,
+  useDeleteOtherExpenseLine,
+  useOtherExpenseList,
+  useUpdateOtherExpenseLine,
+} from "@/hooks/use-purchase";
 import { LedgerEmptyState } from "@/components/ledger/empty-state";
 import {
   LedgerListShell,
@@ -13,47 +21,45 @@ import { OtherExpenseGroupList } from "@/components/ledger/purchase/other/other-
 import { OtherExpenseRegisterDialog } from "@/components/ledger/purchase/other/other-expense-register-dialog";
 import { PurchaseListPagination } from "@/components/ledger/purchase/purchase-list-pagination";
 import { PurchaseListToolbar } from "@/components/ledger/purchase/purchase-list-toolbar";
-import { groupLinesByPaymentDate } from "@/lib/purchase-product-calc";
-import {
-  filterBySearch,
-  paginate,
-  PURCHASE_GROUPS_PAGE_SIZE,
-} from "@/lib/purchase-list-filters";
-import { PUB_SEED_OTHER_LINES } from "@/lib/purchase-pub-seed";
+import { Button } from "@/components/ui/button";
 import type { OtherExpenseLine } from "@/types/purchase-other";
-
-function newLineId(): string {
-  return `oe-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
-}
 
 export function OtherExpensePanel() {
   const { alert, confirm } = useAppDialog();
-  const [lines, setLines] = useState<OtherExpenseLine[]>(PUB_SEED_OTHER_LINES);
-  const { search, setSearch } = useLedgerUrlSearch();
+  const { search, committedSearch, setSearch, applySearch } = useLedgerUrlSearch({
+    commit: "manual",
+  });
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDate, setDialogDate] = useState<string | undefined>();
   const [editLineId, setEditLineId] = useState<string | null>(null);
+  const month = useLedgerMonthParam();
+
+  useEffect(() => {
+    setPage(1);
+  }, [month, committedSearch]);
+
+  const {
+    data: listData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useOtherExpenseList(committedSearch, page);
+
+  const createLine = useCreateOtherExpenseLine();
+  const updateLine = useUpdateOtherExpenseLine();
+  const deleteLineMut = useDeleteOtherExpenseLine();
+
+  const groups = listData?.groups ?? [];
+  const lines = listData?.lines ?? [];
+  const listMeta = listData?.meta;
+  const listTotal = listMeta?.total ?? 0;
+  const listPage = listMeta?.page ?? page;
+  const listLimit = listMeta?.limit ?? 5;
+  const totalPages = Math.max(1, Math.ceil(listTotal / listLimit));
 
   const editLine = lines.find((l) => l.id === editLineId) ?? null;
-
-  const filteredLines = useMemo(
-    () =>
-      filterBySearch(lines, search, (line, q) =>
-        [line.itemName, line.memo].some((v) => v.toLowerCase().includes(q)),
-      ),
-    [lines, search],
-  );
-
-  const allGroups = useMemo(
-    () => groupLinesByPaymentDate(filteredLines),
-    [filteredLines],
-  );
-
-  const { items: pagedGroups, totalPages, page: safePage } = useMemo(
-    () => paginate(allGroups, page, PURCHASE_GROUPS_PAGE_SIZE),
-    [allGroups, page],
-  );
 
   const openRegister = (paymentDate?: string) => {
     setEditLineId(null);
@@ -74,17 +80,19 @@ export function OtherExpensePanel() {
       destructive: true,
     });
     if (!ok) return;
-    setLines((prev) => prev.filter((l) => l.id !== lineId));
+    await deleteLineMut.mutateAsync(lineId);
     setDialogOpen(false);
     setEditLineId(null);
     await alert("삭제되었습니다.");
   };
 
-  const hasLines = lines.length > 0;
+  const hasCommittedSearch = committedSearch.trim().length > 0;
+  const showCatalogEmpty =
+    !hasCommittedSearch && !isLoading && !isError && listTotal === 0;
 
   return (
     <>
-      {!hasLines ? (
+      {showCatalogEmpty ? (
         <LedgerEmptyState
           title="기타지출"
           description="운영 비용을 간단히 기록하세요. 재고 반영은 없습니다."
@@ -93,40 +101,61 @@ export function OtherExpensePanel() {
         />
       ) : (
         <LedgerListShell>
-          <PurchaseListToolbar
-            embedded
-            search={search}
-            onSearchChange={(v) => {
-              setSearch(v);
-              setPage(1);
-            }}
-            searchPlaceholder="항목명, 비고 검색"
-            registerLabel="+ 기타지출 등록"
-            onRegister={() => openRegister()}
-          />
-          {filteredLines.length === 0 ? (
-            <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
-              검색 결과가 없습니다.
+        <PurchaseListToolbar
+          embedded
+          search={search}
+          onSearchChange={setSearch}
+          searchSubmitMode
+          onSearchSubmit={() => {
+            applySearch();
+            setPage(1);
+          }}
+          onSearchClear={() => {
+            applySearch("");
+            setPage(1);
+          }}
+          searchPlaceholder="항목명, 비고 검색"
+          registerLabel="+ 기타지출 등록"
+          onRegister={() => openRegister()}
+        />
+        {isLoading && groups.length === 0 ? (
+          <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
+            기타지출 목록을 불러오는 중입니다.
+          </p>
+        ) : isError ? (
+          <div className="flex flex-col items-center gap-3 py-12">
+            <p className="text-sm text-[var(--color-danger)]">
+              {getPurchaseErrorMessage(error)}
             </p>
-          ) : (
-            <>
-              <div className={ledgerListBodyClass}>
-                <OtherExpenseGroupList
-                  groups={pagedGroups}
-                  onAddToGroup={(date) => openRegister(date)}
-                  onLineClick={openLineDetail}
-                />
-              </div>
-              <div className={ledgerListFooterClass}>
-                <PurchaseListPagination
-                  page={safePage}
-                  totalPages={totalPages}
-                  onPageChange={setPage}
-                />
-              </div>
-            </>
-          )}
-        </LedgerListShell>
+            <Button type="button" variant="outline" size="sm" onClick={() => void refetch()}>
+              다시 시도
+            </Button>
+          </div>
+        ) : groups.length === 0 ? (
+          <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
+            {hasCommittedSearch
+              ? "검색 결과가 없습니다."
+              : "이번 달 기타지출 내역이 없습니다."}
+          </p>
+        ) : (
+          <>
+            <div className={ledgerListBodyClass}>
+              <OtherExpenseGroupList
+                groups={groups}
+                onAddToGroup={(date) => openRegister(date)}
+                onLineClick={openLineDetail}
+              />
+            </div>
+            <div className={ledgerListFooterClass}>
+              <PurchaseListPagination
+                page={listPage}
+                totalPages={totalPages}
+                onPageChange={setPage}
+              />
+            </div>
+          </>
+        )}
+      </LedgerListShell>
       )}
 
       <OtherExpenseRegisterDialog
@@ -137,16 +166,17 @@ export function OtherExpensePanel() {
         }}
         defaultPaymentDate={dialogDate}
         editLine={editLine}
-        onSave={(input) =>
-          setLines((prev) => [...prev, { ...input, id: newLineId() }])
-        }
-        onUpdate={(lineId, input) =>
-          setLines((prev) =>
-            prev.map((line) =>
-              line.id === lineId ? { ...line, ...input } : line,
-            ),
-          )
-        }
+        onSave={async (input: Omit<OtherExpenseLine, "id">) => {
+          await createLine.mutateAsync(input);
+          setDialogOpen(false);
+          await alert("등록되었습니다.");
+        }}
+        onUpdate={async (lineId, input: Omit<OtherExpenseLine, "id">) => {
+          await updateLine.mutateAsync({ id: lineId, line: input });
+          setEditLineId(null);
+          setDialogOpen(false);
+          await alert("저장되었습니다.");
+        }}
         onDelete={
           editLine ? () => handleDeleteLine(editLine.id) : undefined
         }

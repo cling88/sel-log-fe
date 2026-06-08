@@ -18,7 +18,7 @@ interface ProductPurchaseGroupEditDialogProps {
   onOpenChange: (open: boolean) => void;
   paymentDate: string;
   groupName: string;
-  onSave: (data: { paymentDate: string; groupName: string }) => void;
+  onSave: (data: { paymentDate: string; groupName: string }) => void | Promise<void>;
 }
 
 export function ProductPurchaseGroupEditDialog({
@@ -37,11 +37,11 @@ export function ProductPurchaseGroupEditDialog({
     setName(groupName);
   }, [open, paymentDate, groupName]);
 
-  const submit = () => {
+  const submit = async () => {
     const trimmedDate = date.trim();
     const trimmedName = name.trim();
     if (!trimmedDate || !trimmedName) return;
-    onSave({ paymentDate: trimmedDate, groupName: trimmedName });
+    await onSave({ paymentDate: trimmedDate, groupName: trimmedName });
     onOpenChange(false);
   };
 
@@ -74,7 +74,7 @@ export function ProductPurchaseGroupEditDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             취소
           </Button>
-          <Button type="button" onClick={submit}>
+          <Button type="button" onClick={() => void submit()}>
             저장
           </Button>
         </DialogFooter>

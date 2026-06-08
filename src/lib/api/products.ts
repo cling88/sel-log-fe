@@ -1,7 +1,10 @@
 import { ApiError, apiFetch, type ApiEnvelope } from "@/lib/api-client";
 import type { QueryClient } from "@tanstack/react-query";
 import { buildUnifiedHistory } from "@/lib/product-unified-history";
-import type { UnifiedHistoryEntry } from "@/lib/product-unified-history";
+import type {
+  ProductHistoryFilterId,
+  UnifiedHistoryEntry,
+} from "@/lib/product-unified-history";
 import type {
   InventoryPriceHistoryItem,
   InventoryProduct,
@@ -306,11 +309,14 @@ export async function fetchProduct(id: string): Promise<InventoryProduct> {
   return normalizeProduct(res.data ?? {});
 }
 
+export type ProductHistoryKind = ProductHistoryFilterId;
+
 export type ProductHistoryListParams = {
   page?: number;
   limit?: number;
   /** 이력 발생월(created_at) YYYY-MM, 미지정 시 전체 */
   date?: string;
+  kind?: ProductHistoryKind;
 };
 
 export type ProductHistoryListResult<T> = {
@@ -327,6 +333,9 @@ async function fetchHistoryListPage<T>(
   search.set("page", String(params?.page ?? DEFAULT_LIST_PAGE));
   search.set("limit", String(params?.limit ?? PRODUCT_HISTORY_PAGE_SIZE));
   if (params?.date) search.set("date", params.date);
+  if (params?.kind && params.kind !== "all") {
+    search.set("kind", params.kind);
+  }
 
   const res = await apiFetch<
     ApiEnvelope<Record<string, unknown>[]> & { meta?: Partial<ProductsListMeta> }
@@ -382,16 +391,53 @@ export async function fetchProductHistoryTimeline(
     page: number;
     limit?: number;
     currentStock: number;
+    kind?: ProductHistoryKind;
   },
 ): Promise<ProductHistoryTimelineResult> {
   const limit = params.limit ?? PRODUCT_HISTORY_PAGE_SIZE;
   const page = Math.max(1, params.page);
+  const kind = params.kind ?? "all";
 
   const listParams: ProductHistoryListParams = {
     page,
     limit,
     date: params.month,
+    kind,
   };
+
+  if (kind === "sale") {
+    const stockRes = await fetchProductStockHistory(productId, listParams);
+    const unified = buildUnifiedHistory(
+      params.currentStock,
+      stockRes.items,
+      [],
+    );
+    return {
+      entries: unified.slice(0, limit),
+      meta: {
+        total: stockRes.meta.total,
+        page,
+        limit,
+      },
+    };
+  }
+
+  if (kind === "price_edit") {
+    const priceRes = await fetchProductPriceHistory(productId, listParams);
+    const unified = buildUnifiedHistory(
+      params.currentStock,
+      [],
+      priceRes.items,
+    );
+    return {
+      entries: unified.slice(0, limit),
+      meta: {
+        total: priceRes.meta.total,
+        page,
+        limit,
+      },
+    };
+  }
 
   const [stockRes, priceRes] = await Promise.all([
     fetchProductStockHistory(productId, listParams),

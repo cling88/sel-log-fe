@@ -1,7 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
+import { BANKS_QUERY_KEY } from "@/hooks/use-banks";
+import {
+  useCreateIncomeLine,
+  useDeleteIncomeLine,
+  useIncomeList,
+  useUpdateIncomeLine,
+} from "@/hooks/use-income";
+import { getIncomeErrorMessage } from "@/lib/api/income";
+import { useLedgerMonthParam } from "@/hooks/use-ledger-month";
 import { useLedgerUrlSearch } from "@/hooks/use-ledger-url-search";
 import { LedgerEmptyState } from "@/components/ledger/empty-state";
 import {
@@ -13,81 +23,55 @@ import { IncomeDepositGroupList } from "@/components/ledger/income/income-deposi
 import { IncomeDepositRegisterDialog } from "@/components/ledger/income/income-deposit-register-dialog";
 import { PurchaseListPagination } from "@/components/ledger/purchase/purchase-list-pagination";
 import { PurchaseListToolbar } from "@/components/ledger/purchase/purchase-list-toolbar";
-import { todayIso } from "@/lib/date";
-import { createPubSeedIncomeLines } from "@/lib/income-pub-seed";
-import {
-  paginate,
-  PURCHASE_GROUPS_PAGE_SIZE,
-} from "@/lib/purchase-list-filters";
+import { Button } from "@/components/ui/button";
+import { fetchBanks } from "@/lib/api/banks";
 import { formatAmount } from "@/lib/purchase-product-calc";
 import type { IncomeDepositLine } from "@/types/income";
 
-function newLineId(): string {
-  return `inc-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
-}
-
-function groupLinesByDepositDate(lines: IncomeDepositLine[]) {
-  const map = new Map<string, IncomeDepositLine[]>();
-  for (const line of lines) {
-    const bucket = map.get(line.depositDate) ?? [];
-    bucket.push(line);
-    map.set(line.depositDate, bucket);
-  }
-  return [...map.entries()]
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([depositDate, groupLines]) => ({ depositDate, lines: groupLines }));
-}
-
 export function IncomeTabPanel() {
   const { alert, confirm } = useAppDialog();
-  const [lines, setLines] = useState<IncomeDepositLine[]>(() =>
-    createPubSeedIncomeLines(todayIso()),
-  );
-  const { search, setSearch } = useLedgerUrlSearch();
+  const { search, committedSearch, setSearch, applySearch } = useLedgerUrlSearch({
+    commit: "manual",
+  });
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDate, setDialogDate] = useState<string | undefined>();
   const [editLineId, setEditLineId] = useState<string | null>(null);
+  const month = useLedgerMonthParam();
+
+  useEffect(() => {
+    setPage(1);
+  }, [month, committedSearch]);
+
+  useQuery({
+    queryKey: BANKS_QUERY_KEY,
+    queryFn: fetchBanks,
+    staleTime: 60_000,
+  });
+
+  const {
+    data: listData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useIncomeList(committedSearch, page);
+
+  const createLine = useCreateIncomeLine();
+  const updateLine = useUpdateIncomeLine();
+  const deleteLine = useDeleteIncomeLine();
+
+  const groups = listData?.groups ?? [];
+  const lines = listData?.lines ?? [];
+  const listMeta = listData?.meta;
+  const listTotal = listMeta?.total ?? 0;
+  const listPage = listMeta?.page ?? page;
+  const listLimit = listMeta?.limit ?? 5;
+  const totalPages = Math.max(1, Math.ceil(listTotal / listLimit));
+  const todayTotal = listMeta?.todayTotal ?? 0;
+  const monthTotal = listMeta?.monthTotal ?? 0;
 
   const editLine = lines.find((l) => l.id === editLineId) ?? null;
-
-  const today = todayIso();
-  const monthPrefix = today.slice(0, 7);
-
-  const todayDeposits = useMemo(
-    () =>
-      lines
-        .filter((line) => line.depositDate === today)
-        .reduce((sum, line) => sum + line.amount, 0),
-    [lines, today],
-  );
-  const monthDeposits = useMemo(
-    () =>
-      lines
-        .filter((line) => line.depositDate.startsWith(monthPrefix))
-        .reduce((sum, line) => sum + line.amount, 0),
-    [lines, monthPrefix],
-  );
-
-  const filteredLines = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return lines;
-    return lines.filter(
-      (line) =>
-        line.depositDate.includes(q) ||
-        [line.itemName, line.memo].some((v) => v.toLowerCase().includes(q)),
-    );
-  }, [lines, search]);
-
-  const allGroups = useMemo(
-    () => groupLinesByDepositDate(filteredLines),
-    [filteredLines],
-  );
-
-  const { items: pagedGroups, totalPages, page: safePage } = useMemo(
-    () => paginate(allGroups, page, PURCHASE_GROUPS_PAGE_SIZE),
-    [allGroups, page],
-  );
 
   const openRegister = (depositDate?: string) => {
     setEditLineId(null);
@@ -100,6 +84,27 @@ export function IncomeTabPanel() {
     setDialogOpen(true);
   };
 
+  const handleSave = async (
+    input: Omit<IncomeDepositLine, "id">,
+    options?: { closeAfter?: boolean },
+  ) => {
+    await createLine.mutateAsync(input);
+    if (options?.closeAfter !== false) {
+      setDialogOpen(false);
+    }
+    await alert("등록되었습니다.");
+  };
+
+  const handleUpdate = async (
+    lineId: string,
+    input: Omit<IncomeDepositLine, "id">,
+  ) => {
+    await updateLine.mutateAsync({ id: lineId, line: input });
+    setEditLineId(null);
+    setDialogOpen(false);
+    await alert("저장되었습니다.");
+  };
+
   const handleDeleteLine = async (lineId: string) => {
     const ok = await confirm({
       title: "입금 내역 삭제",
@@ -108,13 +113,16 @@ export function IncomeTabPanel() {
       destructive: true,
     });
     if (!ok) return;
-    setLines((prev) => prev.filter((l) => l.id !== lineId));
+    await deleteLine.mutateAsync(lineId);
     setDialogOpen(false);
     setEditLineId(null);
     await alert("삭제되었습니다.");
   };
 
-  const hasLines = lines.length > 0;
+  const hasCommittedSearch = committedSearch.trim().length > 0;
+  const showCatalogEmpty =
+    !hasCommittedSearch && !isLoading && !isError && listTotal === 0;
+  const listErrorMessage = isError ? getIncomeErrorMessage(error) : "";
 
   return (
     <>
@@ -122,18 +130,18 @@ export function IncomeTabPanel() {
         <div className="border-b border-[var(--color-border)] p-4 sm:border-b-0 sm:border-r">
           <p className="text-xs text-[var(--color-text-secondary)]">오늘 입금</p>
           <p className="mt-1 text-lg font-semibold tabular-nums text-[var(--color-income)]">
-            +{formatAmount(todayDeposits)}원
+            +{formatAmount(todayTotal)}원
           </p>
         </div>
         <div className="p-4">
           <p className="text-xs text-[var(--color-text-secondary)]">이번달 입금</p>
           <p className="mt-1 text-lg font-semibold tabular-nums text-[var(--color-income)]">
-            +{formatAmount(monthDeposits)}원
+            +{formatAmount(monthTotal)}원
           </p>
         </div>
       </div>
 
-      {!hasLines ? (
+      {showCatalogEmpty ? (
         <LedgerEmptyState
           title="수익"
           description="통장에 입금된 정산·수입을 기록하세요."
@@ -145,26 +153,49 @@ export function IncomeTabPanel() {
           <PurchaseListToolbar
             embedded
             search={search}
-            onSearchChange={(v) => {
-              setSearch(v);
+            onSearchChange={setSearch}
+            searchSubmitMode
+            onSearchSubmit={() => {
+              applySearch();
               setPage(1);
             }}
-            searchPlaceholder="항목명, 비고 검색"
+            onSearchClear={() => {
+              applySearch("");
+              setPage(1);
+            }}
+            searchPlaceholder="항목명, 비고, 입금일 검색"
             registerLabel="+ 입금 등록"
             onRegister={() => openRegister()}
           />
-          {filteredLines.length === 0 ? (
+          {isLoading && groups.length === 0 ? (
             <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
-              검색 결과가 없습니다.
+              수익 목록을 불러오는 중입니다.
+            </p>
+          ) : isError ? (
+            <div className="flex flex-col items-center gap-3 py-12">
+              <p className="text-sm text-[var(--color-danger)]">{listErrorMessage}</p>
+              <Button type="button" variant="outline" size="sm" onClick={() => void refetch()}>
+                다시 시도
+              </Button>
+            </div>
+          ) : groups.length === 0 ? (
+            <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
+              {hasCommittedSearch
+                ? "검색 결과가 없습니다."
+                : "이번 달 입금 내역이 없습니다."}
             </p>
           ) : (
             <>
               <div className={ledgerListBodyClass}>
-                <IncomeDepositGroupList groups={pagedGroups} onLineClick={openLineDetail} />
+                <IncomeDepositGroupList
+                  groups={groups}
+                  onAddToGroup={(date) => openRegister(date)}
+                  onLineClick={openLineDetail}
+                />
               </div>
               <div className={ledgerListFooterClass}>
                 <PurchaseListPagination
-                  page={safePage}
+                  page={listPage}
                   totalPages={totalPages}
                   onPageChange={setPage}
                 />
@@ -182,14 +213,8 @@ export function IncomeTabPanel() {
         }}
         defaultDepositDate={dialogDate}
         editLine={editLine}
-        onSave={(input) =>
-          setLines((prev) => [...prev, { ...input, id: newLineId() }])
-        }
-        onUpdate={(lineId, input) =>
-          setLines((prev) =>
-            prev.map((line) => (line.id === lineId ? { ...line, ...input } : line)),
-          )
-        }
+        onSave={handleSave}
+        onUpdate={handleUpdate}
         onDelete={editLine ? () => handleDeleteLine(editLine.id) : undefined}
       />
     </>

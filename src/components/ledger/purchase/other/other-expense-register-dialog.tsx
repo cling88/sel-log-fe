@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { REGISTER_MODAL_FOOTER_CLASS } from "@/components/ledger/purchase/ledger-register-dialog-classes";
+import { PurchaseBankSelectField } from "@/components/ledger/purchase/purchase-bank-select-field";
 import { formatDisplayDate, todayIso } from "@/lib/date";
 import {
   createEmptyOtherExpenseInput,
@@ -39,6 +40,7 @@ function lineToInput(line: OtherExpenseLine): OtherExpenseLineInput {
     itemName: line.itemName,
     paymentAmount: String(line.paymentAmount),
     memo: line.memo,
+    bankId: line.bankId ?? "",
   };
 }
 
@@ -50,8 +52,14 @@ function resolvePaymentDate(defaultPaymentDate?: string): string {
   return todayIso();
 }
 
+function resolveBankId(raw: string): string | null {
+  const trimmed = raw.trim();
+  return trimmed || null;
+}
+
 function parseForm(
   form: OtherExpenseLineInput,
+  editLine?: OtherExpenseLine | null,
 ): Omit<OtherExpenseLine, "id"> | null {
   const itemName = form.itemName.trim();
   const paymentDate = form.paymentDate.trim();
@@ -61,11 +69,18 @@ function parseForm(
     return null;
   }
 
+  const bankId = resolveBankId(form.bankId);
+
   return {
     paymentDate,
     itemName,
     paymentAmount,
     memo: form.memo.trim(),
+    bankId,
+    bank:
+      editLine && editLine.bankId === bankId && editLine.bank
+        ? editLine.bank
+        : null,
   };
 }
 
@@ -84,6 +99,7 @@ export function OtherExpenseRegisterDialog({
     createEmptyOtherExpenseInput(resolvePaymentDate(defaultPaymentDate)),
   );
   const [error, setError] = useState<string | null>(null);
+  const formSessionRef = useRef<string | null>(null);
 
   const resetForm = (paymentDate?: string) => {
     setForm(createEmptyOtherExpenseInput(resolvePaymentDate(paymentDate)));
@@ -91,7 +107,17 @@ export function OtherExpenseRegisterDialog({
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      formSessionRef.current = null;
+      return;
+    }
+
+    const sessionKey = editLine
+      ? `edit:${editLine.id}`
+      : `new:${defaultPaymentDate ?? ""}`;
+    if (formSessionRef.current === sessionKey) return;
+    formSessionRef.current = sessionKey;
+
     if (editLine) {
       setForm(lineToInput(editLine));
       setError(null);
@@ -111,7 +137,7 @@ export function OtherExpenseRegisterDialog({
   };
 
   const submit = async (closeAfter: boolean) => {
-    const parsed = parseForm(form);
+    const parsed = parseForm(form, editLine);
     if (!parsed) {
       setError("결제날짜, 항목명, 금액을 확인해 주세요.");
       return;
@@ -128,6 +154,7 @@ export function OtherExpenseRegisterDialog({
       onOpenChange(false);
       return;
     }
+    formSessionRef.current = `new:${parsed.paymentDate}`;
     resetForm(parsed.paymentDate);
   };
 
@@ -167,6 +194,12 @@ export function OtherExpenseRegisterDialog({
                 기본값: 오늘 ({formatDisplayDate(displayDate)})
               </p>
             </div>
+
+            <PurchaseBankSelectField
+              bankId={resolveBankId(form.bankId)}
+              bankSnapshot={editLine?.bank}
+              onBankIdChange={(id) => patch({ bankId: id ?? "" })}
+            />
 
             <div className="space-y-1.5">
               <Label htmlFor="oe-name">

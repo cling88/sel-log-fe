@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
+import { resolveBackendOrigin } from "./src/lib/backend-origin";
 
 /** BE 서버 주소 (FE 4002와 별도). Swagger와 동일하게 BE `PORT`(기본 4003) */
-const apiProxyTarget =
-  process.env.API_PROXY_TARGET ?? "http://localhost:4003";
+const apiProxyTarget = resolveBackendOrigin();
 
 const nextConfig: NextConfig = {
   async rewrites() {

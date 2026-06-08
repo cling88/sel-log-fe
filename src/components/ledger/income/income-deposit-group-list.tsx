@@ -5,8 +5,10 @@ import { IncomeDepositLineList } from "@/components/ledger/income/income-deposit
 import {
   purchaseGroupBodyClass,
   purchaseGroupCardClass,
+  purchaseGroupFooterClass,
   purchaseGroupHeaderClass,
 } from "@/components/ledger/purchase/purchase-ui";
+import { Button } from "@/components/ui/button";
 import { formatDisplayDate } from "@/lib/date";
 import { formatWon } from "@/lib/utils";
 import type { IncomeDepositLine } from "@/types/income";
@@ -15,11 +17,13 @@ import { cn } from "@/lib/utils";
 
 interface IncomeDepositGroupListProps {
   groups: { depositDate: string; lines: IncomeDepositLine[] }[];
+  onAddToGroup: (depositDate: string) => void;
   onLineClick: (lineId: string) => void;
 }
 
 export function IncomeDepositGroupList({
   groups,
+  onAddToGroup,
   onLineClick,
 }: IncomeDepositGroupListProps) {
   const [expandedDates, setExpandedDates] = useState<Set<string>>(
@@ -79,6 +83,17 @@ export function IncomeDepositGroupList({
             {expanded ? (
               <div className={purchaseGroupBodyClass}>
                 <IncomeDepositLineList lines={group.lines} onLineClick={onLineClick} />
+                <div className={purchaseGroupFooterClass}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 border-[var(--color-border)] bg-white text-xs shadow-none hover:bg-emerald-50/60"
+                    onClick={() => onAddToGroup(group.depositDate)}
+                  >
+                    + 내역 추가
+                  </Button>
+                </div>
               </div>
             ) : null}
           </div>

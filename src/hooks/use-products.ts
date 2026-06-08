@@ -24,6 +24,7 @@ import {
   type StockAdjustRequest,
 } from "@/lib/api/products";
 import { toYearMonthParam } from "@/lib/ledger-period";
+import type { ProductHistoryFilterId } from "@/lib/product-unified-history";
 import type { InventoryProduct, InventoryProductInput } from "@/types/inventory-product";
 
 export const PRODUCTS_QUERY_KEY = ["products"] as const;
@@ -47,6 +48,7 @@ export function productHistoryQueryKey(
   year: number,
   month: number,
   page: number,
+  filter: ProductHistoryFilterId = "all",
 ) {
   return [
     ...PRODUCTS_QUERY_KEY,
@@ -54,6 +56,7 @@ export function productHistoryQueryKey(
     productId,
     toYearMonthParam(year, month),
     page,
+    filter,
   ] as const;
 }
 
@@ -117,19 +120,27 @@ export function useProductHistory(
   month: number,
   page: number,
   currentStock: number,
+  filter: ProductHistoryFilterId = "all",
   options?: { enabled?: boolean },
 ) {
   const monthParam = toYearMonthParam(year, month);
   const safePage = Math.max(1, page);
 
   return useQuery({
-    queryKey: productHistoryQueryKey(productId, year, month, safePage),
+    queryKey: productHistoryQueryKey(
+      productId,
+      year,
+      month,
+      safePage,
+      filter,
+    ),
     queryFn: () =>
       fetchProductHistoryTimeline(productId!, {
         month: monthParam,
         page: safePage,
         limit: PRODUCT_HISTORY_PAGE_SIZE,
         currentStock,
+        kind: filter,
       }),
     enabled: (options?.enabled ?? true) && !!productId,
     staleTime: 30_000,

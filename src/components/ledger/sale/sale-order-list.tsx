@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatDisplayDate } from "@/lib/date";
 import { formatAmount } from "@/lib/purchase-product-calc";
+import { formatSaleChannelLabel } from "@/lib/sale-channel-label";
 import type { SaleOrder } from "@/types/sale";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,11 @@ export function SaleOrderList({
         const expanded = expandedIds.has(order.id);
         const cancelled = order.status === "cancelled";
         const itemsSubtotal = calcItemsSubtotal(order);
+
+        const channelLabel = formatSaleChannelLabel(
+          order.channelId,
+          order.channel,
+        );
 
         return (
           <div
@@ -120,9 +126,9 @@ export function SaleOrderList({
                     <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
                       {formatDisplayDate(order.orderDate)} · {order.orderNo}
                     </p>
-                    {order.channel ? (
+                    {channelLabel !== "선택" ? (
                       <span className="shrink-0 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 py-px text-[10px] font-medium text-[var(--color-text-secondary)]">
-                        {order.channel}
+                        {channelLabel}
                       </span>
                     ) : null}
                   </div>

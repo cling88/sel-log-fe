@@ -1,8 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLedgerMonthParam } from "@/hooks/use-ledger-month";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { useLedgerUrlSearch } from "@/hooks/use-ledger-url-search";
+import {
+  getPurchaseErrorMessage,
+  linePayloadFromProductPurchase,
+  useCancelProductPurchaseStockReflect,
+  useCreateProductPurchaseLine,
+  useDeleteProductPurchaseLine,
+  usePatchPurchaseGroup,
+  usePatchPurchaseGroupCancel,
+  useProductPurchaseList,
+  useReflectProductPurchaseStock,
+  useUpdateProductPurchaseLine,
+} from "@/hooks/use-purchase";
 import { LedgerEmptyState } from "@/components/ledger/empty-state";
 import {
   LedgerListShell,
@@ -15,55 +28,20 @@ import { ProductPurchaseGroupList } from "@/components/ledger/purchase/product-p
 import { ProductPurchaseRegisterDialog } from "@/components/ledger/purchase/product-purchase-register-dialog";
 import { PurchaseListPagination } from "@/components/ledger/purchase/purchase-list-pagination";
 import { PurchaseListToolbar } from "@/components/ledger/purchase/purchase-list-toolbar";
-import { groupLinesByPaymentDate } from "@/lib/purchase-product-calc";
-import {
-  filterBySearch,
-  paginate,
-  PURCHASE_GROUPS_PAGE_SIZE,
-} from "@/lib/purchase-list-filters";
-import {
-  PUB_SEED_PRODUCT_GROUP_META,
-  PUB_SEED_PRODUCT_LINES,
-} from "@/lib/purchase-pub-seed";
+import { Button } from "@/components/ui/button";
 import {
   createDefaultGroupMeta,
+  sanitizeAdjustments,
   type PurchaseGroupMeta,
 } from "@/types/purchase-group";
 import type { ProductPurchaseLine } from "@/types/purchase-product";
-import type {
-  InventoryPriceHistoryItem,
-  InventoryProduct,
-  InventoryStockHistoryItem,
-} from "@/types/inventory-product";
 import type { StockReflectInfo } from "@/components/ledger/purchase/ledger-stock-reflect-dialog";
-
-const PRODUCTS_STORAGE_KEY = "sellog-products-pub-v1";
-
-function newLineId(): string {
-  return `pp-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
-}
-
-function syncGroupMeta(
-  lines: ProductPurchaseLine[],
-  meta: Record<string, PurchaseGroupMeta>,
-): Record<string, PurchaseGroupMeta> {
-  const groups = groupLinesByPaymentDate(lines);
-  const next = { ...meta };
-  groups.forEach((g, index) => {
-    if (!next[g.paymentDate]) {
-      next[g.paymentDate] = createDefaultGroupMeta(index);
-    }
-  });
-  return next;
-}
 
 export function ProductPurchasePanel() {
   const { alert, confirm } = useAppDialog();
-  const [lines, setLines] = useState<ProductPurchaseLine[]>(PUB_SEED_PRODUCT_LINES);
-  const [groupMeta, setGroupMeta] = useState<Record<string, PurchaseGroupMeta>>(
-    () => ({ ...PUB_SEED_PRODUCT_GROUP_META }),
-  );
-  const { search, setSearch } = useLedgerUrlSearch();
+  const { search, committedSearch, setSearch, applySearch } = useLedgerUrlSearch({
+    commit: "manual",
+  });
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDate, setDialogDate] = useState<string | undefined>();
@@ -74,32 +52,38 @@ export function ProductPurchasePanel() {
   );
   const [bulkQueue, setBulkQueue] = useState<string[]>([]);
   const [savingSummaryDate, setSavingSummaryDate] = useState<string | null>(null);
+  const month = useLedgerMonthParam();
+
+  useEffect(() => {
+    setPage(1);
+  }, [month, committedSearch]);
+
+  const {
+    data: listData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useProductPurchaseList(committedSearch, page);
+
+  const createLine = useCreateProductPurchaseLine();
+  const updateLine = useUpdateProductPurchaseLine();
+  const deleteLine = useDeleteProductPurchaseLine();
+  const reflectStock = useReflectProductPurchaseStock();
+  const cancelReflect = useCancelProductPurchaseStockReflect();
+  const patchGroup = usePatchPurchaseGroup();
+  const patchGroupCancel = usePatchPurchaseGroupCancel();
+
+  const groups = listData?.groups ?? [];
+  const groupMeta = listData?.groupMeta ?? {};
+  const lines = listData?.lines ?? [];
+  const listMeta = listData?.meta;
+  const listTotal = listMeta?.total ?? 0;
+  const listPage = listMeta?.page ?? page;
+  const listLimit = listMeta?.limit ?? 5;
+  const totalPages = Math.max(1, Math.ceil(listTotal / listLimit));
 
   const editLine = lines.find((l) => l.id === editLineId) ?? null;
-
-  const filteredLines = useMemo(
-    () =>
-      filterBySearch(
-        lines,
-        search,
-        (line, q) =>
-          line.productName.toLowerCase().includes(q) ||
-          line.vendor.toLowerCase().includes(q) ||
-          line.orderNo.toLowerCase().includes(q),
-        groupMeta,
-      ),
-    [lines, search, groupMeta],
-  );
-
-  const allGroups = useMemo(
-    () => groupLinesByPaymentDate(filteredLines),
-    [filteredLines],
-  );
-
-  const { items: pagedGroups, totalPages, page: safePage } = useMemo(
-    () => paginate(allGroups, page, PURCHASE_GROUPS_PAGE_SIZE),
-    [allGroups, page],
-  );
 
   const stockReflectLine =
     lines.find((l) => l.id === (stockReflectLineId ?? bulkQueue[0])) ?? null;
@@ -116,6 +100,16 @@ export function ProductPurchasePanel() {
         .filter(Boolean)
         .join(" · "),
       quantity: stockReflectLine.quantity,
+      lineContext: {
+        productName: stockReflectLine.productName,
+        imageUrl: stockReflectLine.imageUrl,
+        paymentAmount: stockReflectLine.paymentAmount,
+        quantity: stockReflectLine.quantity,
+        vendor: stockReflectLine.vendor,
+        orderNo: stockReflectLine.orderNo,
+        productLink: stockReflectLine.productLink,
+        memo: stockReflectLine.memo,
+      },
     };
   }, [stockReflectLine]);
 
@@ -130,31 +124,35 @@ export function ProductPurchasePanel() {
     setDialogOpen(true);
   };
 
-  const handleSave = (
+  const handleSave = async (
     input: Omit<ProductPurchaseLine, "id" | "stockReflected">,
+    options?: { closeAfter?: boolean },
   ) => {
-    setLines((prev) => {
-      const next = [
-        ...prev,
-        { ...input, id: newLineId(), stockReflected: false },
-      ];
-      setGroupMeta((m) => syncGroupMeta(next, m));
-      return next;
-    });
+    await createLine.mutateAsync(linePayloadFromProductPurchase(input));
+    await alert("등록되었습니다.");
+    if (options?.closeAfter !== false) {
+      setDialogOpen(false);
+    }
   };
 
-  const handleUpdate = (
+  const handleUpdate = async (
     lineId: string,
     input: Omit<ProductPurchaseLine, "id" | "stockReflected">,
   ) => {
-    setLines((prev) => {
-      const next = prev.map((line) =>
-        line.id === lineId ? { ...line, ...input } : line,
+    const line = lines.find((l) => l.id === lineId);
+    if (line?.stockReflected) {
+      await alert(
+        "재고 반영된 내역은 수정할 수 없습니다. 수정하려면 반영을 취소해 주세요.",
       );
-      setGroupMeta((m) => syncGroupMeta(next, m));
-      return next;
+      return;
+    }
+    await updateLine.mutateAsync({
+      id: lineId,
+      body: linePayloadFromProductPurchase(input),
     });
     setEditLineId(null);
+    setDialogOpen(false);
+    await alert("저장되었습니다.");
   };
 
   const handleDeleteLine = async (lineId: string) => {
@@ -172,11 +170,7 @@ export function ProductPurchasePanel() {
       destructive: true,
     });
     if (!ok) return;
-    setLines((prev) => {
-      const next = prev.filter((l) => l.id !== lineId);
-      setGroupMeta((m) => syncGroupMeta(next, m));
-      return next;
-    });
+    await deleteLine.mutateAsync(lineId);
     setDialogOpen(false);
     setEditLineId(null);
     await alert("삭제되었습니다.");
@@ -197,12 +191,9 @@ export function ProductPurchasePanel() {
       destructive: true,
     });
     if (!ok) return;
-    setLines((prev) => prev.filter((l) => l.paymentDate !== paymentDate));
-    setGroupMeta((prev) => {
-      const next = { ...prev };
-      delete next[paymentDate];
-      return next;
-    });
+    for (const line of groupLines) {
+      await deleteLine.mutateAsync(line.id);
+    }
     await alert("그룹이 삭제되었습니다.");
   };
 
@@ -215,99 +206,65 @@ export function ProductPurchasePanel() {
   }) => {
     if (!editGroupDate) return;
     const oldDate = editGroupDate;
-    setLines((prev) =>
-      prev.map((line) =>
-        line.paymentDate === oldDate
-          ? { ...line, paymentDate: newDate }
-          : line,
-      ),
-    );
-    setGroupMeta((prev) => {
-      const next = { ...prev };
-      const existing = next[oldDate] ?? createDefaultGroupMeta(0);
-      delete next[oldDate];
-      next[newDate] = { ...existing, groupName };
-      return next;
+    const meta = groupMeta[oldDate] ?? createDefaultGroupMeta(0);
+    const groupLines = lines.filter((l) => l.paymentDate === oldDate);
+
+    if (newDate !== oldDate) {
+      if (groupLines.some((l) => l.stockReflected)) {
+        await alert(
+          "재고 반영된 내역이 있어 결제날짜를 변경할 수 없습니다. 반영 취소 후 다시 시도해 주세요.",
+        );
+        return;
+      }
+      for (const line of groupLines) {
+        await updateLine.mutateAsync({
+          id: line.id,
+          body: linePayloadFromProductPurchase({
+            ...line,
+            paymentDate: newDate,
+          }),
+        });
+      }
+    }
+
+    await patchGroup.mutateAsync({
+      paymentDate: newDate,
+      groupName,
+      extraFees: meta.extraFees.map(({ id, label, amount }) => ({
+        id,
+        label,
+        amount,
+      })),
+      discounts: meta.discounts.map(({ id, label, amount }) => ({
+        id,
+        label,
+        amount,
+      })),
     });
+
     setEditGroupDate(null);
     await alert("그룹 정보가 저장되었습니다.");
   };
 
   const finishStockReflect = async (lineId: string, info: StockReflectInfo) => {
-    const line = lines.find((l) => l.id === lineId);
+    await reflectStock.mutateAsync({
+      id: lineId,
+      body: { productSku: info.sku, qty: info.qty },
+    });
 
-    // 상품 마스터(localStorage) 재고·가격 반영
-    if (line && typeof globalThis.localStorage !== "undefined") {
-      try {
-        const raw = globalThis.localStorage.getItem(PRODUCTS_STORAGE_KEY);
-        const storedProducts: InventoryProduct[] = raw ? JSON.parse(raw) : [];
-        const now = new Date().toISOString();
-        const unitPrice =
-          info.qty > 0 ? Math.round(line.paymentAmount / info.qty) : 0;
+    let remaining: string[] = [];
+    setBulkQueue((q) => {
+      remaining = q.filter((id) => id !== lineId);
+      return remaining;
+    });
 
-        const updated = storedProducts.map((p) => {
-          if (p.sku !== info.sku || p.deletedAtIso) return p;
-
-          const stockEntry: InventoryStockHistoryItem = {
-            id: `stk-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
-            atIso: now,
-            delta: info.qty,
-            source: "purchase",
-            vendor: line.vendor,
-            orderNo: line.orderNo,
-            unitPrice,
-            totalAmount: line.paymentAmount,
-            reason: `매입 재고반영 (${line.productName})`,
-          };
-
-          const priceChanged = unitPrice > 0 && unitPrice !== p.currentPrice;
-          const priceEntry: InventoryPriceHistoryItem | null = priceChanged
-            ? {
-                id: `prh-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
-                atIso: now,
-                price: unitPrice,
-                source: "purchase",
-                reason: `매입 반영 (${line.vendor})`,
-              }
-            : null;
-
-          return {
-            ...p,
-            stock: p.stock + info.qty,
-            ...(priceChanged ? { currentPrice: unitPrice } : {}),
-            stockHistory: [stockEntry, ...p.stockHistory],
-            priceHistory: priceEntry
-              ? [priceEntry, ...p.priceHistory]
-              : p.priceHistory,
-            updatedAtIso: now,
-          };
-        });
-
-        globalThis.localStorage.setItem(
-          PRODUCTS_STORAGE_KEY,
-          JSON.stringify(updated),
-        );
-      } catch {
-        // 저장 실패 시 라인 상태는 그대로 반영 처리
-      }
+    if (remaining.length === 0) {
+      setStockReflectLineId(null);
+      await alert("재고 반영이 완료되었습니다.");
+      return;
     }
 
-    setLines((prev) =>
-      prev.map((l) =>
-        l.id === lineId
-          ? { ...l, stockReflected: true, productSku: info.sku }
-          : l,
-      ),
-    );
-    setStockReflectLineId(null);
-    setBulkQueue((q) => {
-      const rest = q.filter((id) => id !== lineId);
-      if (rest.length === 0) {
-        void alert("재고 반영이 완료되었습니다.");
-      }
-      if (rest.length > 0) setStockReflectLineId(rest[0]);
-      return rest;
-    });
+    setStockReflectLineId(remaining[0]);
   };
 
   const handleBulkStockReflect = async (paymentDate: string) => {
@@ -325,16 +282,11 @@ export function ProductPurchasePanel() {
     setStockReflectLineId(pending[0]);
   };
 
-  const handleToggleOrderCancel = (paymentDate: string) => {
-    setGroupMeta((prev) => {
-      const current = prev[paymentDate] ?? createDefaultGroupMeta(0);
-      return {
-        ...prev,
-        [paymentDate]: {
-          ...current,
-          orderCancelled: !current.orderCancelled,
-        },
-      };
+  const handleToggleOrderCancel = async (paymentDate: string) => {
+    const current = groupMeta[paymentDate] ?? createDefaultGroupMeta(0);
+    await patchGroupCancel.mutateAsync({
+      paymentDate,
+      orderCancelled: !current.orderCancelled,
     });
   };
 
@@ -342,30 +294,52 @@ export function ProductPurchasePanel() {
     paymentDate: string,
     patch: Pick<PurchaseGroupMeta, "extraFees" | "discounts">,
   ) => {
+    const meta = groupMeta[paymentDate] ?? createDefaultGroupMeta(0);
     setSavingSummaryDate(paymentDate);
     try {
-      // TODO: API 연동 시 PATCH /purchase-groups/{id}/adjustments 등 호출
-      setGroupMeta((prev) => ({
-        ...prev,
-        [paymentDate]: {
-          ...(prev[paymentDate] ?? createDefaultGroupMeta(0)),
-          ...patch,
-        },
-      }));
+      await patchGroup.mutateAsync({
+        paymentDate,
+        groupName: meta.groupName,
+        extraFees: sanitizeAdjustments(patch.extraFees).map(
+          ({ id, label, amount }) => ({ id, label, amount }),
+        ),
+        discounts: sanitizeAdjustments(patch.discounts).map(
+          ({ id, label, amount }) => ({ id, label, amount }),
+        ),
+      });
       await alert("추가금·할인금이 저장되었습니다.");
     } finally {
       setSavingSummaryDate(null);
     }
   };
 
-  const hasLines = lines.length > 0;
+  const handleCancelStockReflect = async (lineId: string) => {
+    const ok = await confirm({
+      title: "재고 반영 취소",
+      message: "이 내역의 재고 반영을 취소할까요?",
+      confirmLabel: "반영 취소",
+    });
+    if (!ok) return;
+    try {
+      await cancelReflect.mutateAsync(lineId);
+      await alert("재고 반영이 취소되었습니다.");
+    } catch {
+      // useCancelProductPurchaseStockReflect onError에서 메시지 표시
+    }
+  };
+
+  const hasCommittedSearch = committedSearch.trim().length > 0;
+  const showCatalogEmpty =
+    !hasCommittedSearch && !isLoading && !isError && listTotal === 0;
+  const listErrorMessage = isError ? getPurchaseErrorMessage(error) : null;
+
   const editingGroupMeta = editGroupDate
     ? groupMeta[editGroupDate]
     : undefined;
 
   return (
     <>
-      {!hasLines ? (
+      {showCatalogEmpty ? (
         <LedgerEmptyState
           title="상품매입"
           actionLabel="+ 상품 매입 등록하기"
@@ -376,8 +350,14 @@ export function ProductPurchasePanel() {
           <PurchaseListToolbar
             embedded
             search={search}
-            onSearchChange={(v) => {
-              setSearch(v);
+            onSearchChange={setSearch}
+            searchSubmitMode
+            onSearchSubmit={() => {
+              applySearch();
+              setPage(1);
+            }}
+            onSearchClear={() => {
+              applySearch("");
               setPage(1);
             }}
             searchPlaceholder="그룹명, 상품명, 구매처, 주문번호 검색"
@@ -385,37 +365,46 @@ export function ProductPurchasePanel() {
             registerLabel="+ 상품 매입 등록"
             onRegister={() => openRegister()}
           />
-          {filteredLines.length === 0 ? (
+          {isLoading && groups.length === 0 ? (
             <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
-              검색 결과가 없습니다.
+              상품매입 목록을 불러오는 중입니다.
+            </p>
+          ) : isError ? (
+            <div className="flex flex-col items-center gap-3 py-12">
+              <p className="text-sm text-[var(--color-danger)]">
+                {listErrorMessage}
+              </p>
+              <Button type="button" variant="outline" size="sm" onClick={() => void refetch()}>
+                다시 시도
+              </Button>
+            </div>
+          ) : groups.length === 0 ? (
+            <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
+              {hasCommittedSearch
+                ? "검색 결과가 없습니다."
+                : "이번 달 상품매입 내역이 없습니다."}
             </p>
           ) : (
             <>
               <div className={ledgerListBodyClass}>
                 <ProductPurchaseGroupList
-                  groups={pagedGroups}
+                  groups={groups}
                   groupMeta={groupMeta}
                   onAddToGroup={(date) => openRegister(date)}
                   onReflectStock={setStockReflectLineId}
-                  onCancelStockReflect={(id) =>
-                    setLines((prev) =>
-                      prev.map((line) =>
-                        line.id === id ? { ...line, stockReflected: false } : line,
-                      ),
-                    )
-                  }
+                  onCancelStockReflect={(id) => void handleCancelStockReflect(id)}
                   onLineClick={openEditLine}
                   onEditGroup={(date) => setEditGroupDate(date)}
                   onDeleteGroup={(date) => void handleDeleteGroup(date)}
                   onSaveGroupSummary={handleSaveGroupSummary}
                   savingSummaryDate={savingSummaryDate}
                   onBulkStockReflect={(date) => void handleBulkStockReflect(date)}
-                  onToggleOrderCancel={handleToggleOrderCancel}
+                  onToggleOrderCancel={(date) => void handleToggleOrderCancel(date)}
                 />
               </div>
               <div className={ledgerListFooterClass}>
                 <PurchaseListPagination
-                  page={safePage}
+                  page={listPage}
                   totalPages={totalPages}
                   onPageChange={setPage}
                 />
@@ -436,9 +425,7 @@ export function ProductPurchasePanel() {
         onSave={handleSave}
         onUpdate={handleUpdate}
         onDelete={
-          editLine
-            ? () => handleDeleteLine(editLine.id)
-            : undefined
+          editLine ? () => handleDeleteLine(editLine.id) : undefined
         }
         canDelete={!editLine?.stockReflected}
         deleteDisabledReason="재고 반영 후 삭제하려면 반영취소하세요."

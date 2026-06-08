@@ -1,8 +1,21 @@
+import type { LedgerEarliestMonthTab } from "@/lib/api/ledger";
 import type { LedgerTabId } from "@/types/common";
+
+export type MonthTab = { value: string; month: number; label: string };
+
+export type MonthTabRangeOptions = {
+  earliestYm: string | null;
+  extraMonths?: string[];
+};
 
 /** 매입·매출·수익만 월별 조회. 상품관리는 마스터 데이터라 월 필터 없음 */
 export function isMonthScopedLedgerTab(tab: LedgerTabId): boolean {
   return tab === "purchase" || tab === "sale" || tab === "income";
+}
+
+export function toEarliestMonthTab(tab: LedgerTabId): LedgerEarliestMonthTab | null {
+  if (tab === "purchase" || tab === "sale" || tab === "income") return tab;
+  return null;
 }
 
 /** 퍼블 기준 장부 사용 시작 월 (추후 BE createdAt 연동) */
@@ -35,6 +48,45 @@ function getTabStartYearMonth(_tab: LedgerTabId): string {
   return PUB_LEDGER_START_YM;
 }
 
+/** API earliest-month + 수동 추가 월 기준 탭 목록 */
+export function buildMonthTabs(
+  year: number,
+  options: MonthTabRangeOptions,
+): MonthTab[] {
+  const { year: currentYear, month: currentMonth } = getTodayYearMonth();
+  if (year > currentYear) return [];
+
+  const values = new Set<string>();
+
+  if (options.earliestYm) {
+    const start = parseYearMonth(options.earliestYm);
+    if (start && start.year === year) {
+      const maxMonth = year === currentYear ? currentMonth : 12;
+      for (let m = start.month; m <= maxMonth; m += 1) {
+        values.add(toYearMonthParam(year, m));
+      }
+    }
+  }
+
+  for (const ym of options.extraMonths ?? []) {
+    const parsed = parseYearMonth(ym);
+    if (parsed?.year === year) values.add(ym);
+  }
+
+  // 데이터 없어도 현재 연도는 이번 달 탭 항상 표시
+  if (year === currentYear) {
+    values.add(toYearMonthParam(currentYear, currentMonth));
+  }
+
+  return Array.from(values)
+    .sort(compareYearMonth)
+    .map((value) => {
+      const parsed = parseYearMonth(value)!;
+      return { value, month: parsed.month, label: `${parsed.month}월` };
+    });
+}
+
+/** 상품 이력 등 레거시 — 고정 시작 월 기준 */
 export function listMonthTabsForYear(tab: LedgerTabId, year: number) {
   const startYm = getTabStartYearMonth(tab);
   const [startYearStr, startMonthStr] = startYm.split("-");
@@ -47,7 +99,7 @@ export function listMonthTabsForYear(tab: LedgerTabId, year: number) {
   const minMonth = year === startYear ? startMonth : 1;
   const maxMonth = year === currentYear ? currentMonth : 12;
 
-  const tabs: { value: string; month: number; label: string }[] = [];
+  const tabs: MonthTab[] = [];
   for (let month = minMonth; month <= maxMonth; month += 1) {
     tabs.push({
       value: toYearMonthParam(year, month),
@@ -58,15 +110,13 @@ export function listMonthTabsForYear(tab: LedgerTabId, year: number) {
   return tabs;
 }
 
-export function resolveSelectedMonthForTab(
-  tab: LedgerTabId,
+export function resolveSelectedMonth(
   year: number,
   preferredMonth: number,
+  tabs: MonthTab[],
 ) {
-  const tabs = listMonthTabsForYear(tab, year);
   if (tabs.length === 0) {
-    const { year: y, month: m } = getTodayYearMonth();
-    return { year: y, month: m };
+    return { year, month: preferredMonth };
   }
 
   const preferredValue = toYearMonthParam(year, preferredMonth);
@@ -83,6 +133,19 @@ export function resolveSelectedMonthForTab(
 
   const last = tabs[tabs.length - 1];
   return { year, month: last.month };
+}
+
+export function resolveSelectedMonthForTab(
+  tab: LedgerTabId,
+  year: number,
+  preferredMonth: number,
+) {
+  const tabs = listMonthTabsForYear(tab, year);
+  if (tabs.length === 0) {
+    const { year: y, month: m } = getTodayYearMonth();
+    return { year: y, month: m };
+  }
+  return resolveSelectedMonth(year, preferredMonth, tabs);
 }
 
 export function listYearOptions() {

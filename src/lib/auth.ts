@@ -21,6 +21,8 @@ export interface LoginSuccessData {
   user: AuthUser;
 }
 
+import { resolveBackendApiBaseUrl } from "@/lib/backend-origin";
+
 /**
  * API 베이스 (`/api/v1` 포함)
  * - 브라우저: 같은 origin `/api/v1` → Next rewrites가 BE로 프록시
@@ -30,14 +32,7 @@ export function getApiBaseUrl(): string {
     return "/api/v1";
   }
 
-  const raw =
-    process.env.API_PROXY_TARGET ??
-    process.env.NEXT_PUBLIC_API_URL ??
-    process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!raw) return "http://localhost:4003/api/v1";
-  const trimmed = raw.replace(/\/$/, "");
-  if (trimmed.endsWith("/api/v1")) return trimmed;
-  return `${trimmed}/api/v1`;
+  return resolveBackendApiBaseUrl();
 }
 
 function readCookieToken(): string | null {

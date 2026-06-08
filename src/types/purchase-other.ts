@@ -1,4 +1,6 @@
-export interface OtherExpenseLine {
+import type { PurchaseLineBankFields } from "@/types/bank-account";
+
+export interface OtherExpenseLine extends PurchaseLineBankFields {
   id: string;
   paymentDate: string;
   itemName: string;
@@ -11,6 +13,7 @@ export interface OtherExpenseLineInput {
   itemName: string;
   paymentAmount: string;
   memo: string;
+  bankId: string;
 }
 
 export function createEmptyOtherExpenseInput(
@@ -21,5 +24,6 @@ export function createEmptyOtherExpenseInput(
     itemName: "",
     paymentAmount: "",
     memo: "",
+    bankId: "",
   };
 }

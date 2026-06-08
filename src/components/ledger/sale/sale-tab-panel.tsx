@@ -1,8 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
+import { useLedgerMonthParam } from "@/hooks/use-ledger-month";
 import { useLedgerUrlSearch } from "@/hooks/use-ledger-url-search";
+import { PRODUCTS_QUERY_KEY } from "@/hooks/use-products";
+import { SALES_CHANNELS_QUERY_KEY } from "@/hooks/use-sales-channels";
+import {
+  getSaleErrorMessage,
+  useCreateSaleOrder,
+  useDeleteSaleOrder,
+  usePatchSaleOrderCancel,
+  useSaleOrderList,
+  useUpdateSaleOrder,
+} from "@/hooks/use-sales";
 import { MODAL_DIALOG_FOOTER_CLASS } from "@/components/common/modal-footer-classes";
 import { LedgerEmptyState } from "@/components/ledger/empty-state";
 import {
@@ -11,6 +23,7 @@ import {
   ledgerListFooterClass,
 } from "@/components/ledger/ledger-list-shell";
 import { SaleOrderList } from "@/components/ledger/sale/sale-order-list";
+import { SaleChannelSelectField } from "@/components/ledger/sale/sale-channel-select-field";
 import { PurchaseListPagination } from "@/components/ledger/purchase/purchase-list-pagination";
 import { PurchaseListToolbar } from "@/components/ledger/purchase/purchase-list-toolbar";
 import { Button } from "@/components/ui/button";
@@ -25,20 +38,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { fetchProducts } from "@/lib/api/products";
+import { fetchSalesChannels } from "@/lib/api/sales-channels";
+import { toSaleOrderPayload } from "@/lib/api/sales";
 import { todayIso } from "@/lib/date";
 import { formatAmount } from "@/lib/purchase-product-calc";
-import { paginate } from "@/lib/purchase-list-filters";
-import { createPubSeedSaleOrders } from "@/lib/sale-pub-seed";
-import type { InventoryProduct, InventoryStockHistoryItem } from "@/types/inventory-product";
-import type { SaleOrder, SaleOrderAdjustment, SaleOrderItem } from "@/types/sale";
-import { SALE_CHANNELS } from "@/types/sale";
+import type { InventoryProduct } from "@/types/inventory-product";
+import type { SaleOrder, SaleOrderAdjustment } from "@/types/sale";
 
-const SALE_PAGE_SIZE = 8;
-const PRODUCTS_STORAGE_KEY = "sellog-products-pub-v1";
-
-function newOrderId() {
-  return `so-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`;
-}
+const PRODUCTS_PICKER_QUERY_KEY = [...PRODUCTS_QUERY_KEY, "picker", "sale"] as const;
 
 interface SaleOrderItemInput {
   productId: string;
@@ -51,7 +59,7 @@ interface SaleOrderFormInput {
   orderDate: string;
   orderNo: string;
   customerName: string;
-  channel: string;
+  channelId: string | null;
   items: SaleOrderItemInput[];
   extraAdjustments: SaleOrderAdjustment[];
   discountAdjustments: SaleOrderAdjustment[];
@@ -80,12 +88,73 @@ function createEmptyInput(): SaleOrderFormInput {
     orderDate: todayIso(),
     orderNo: "",
     customerName: "",
-    channel: "",
+    channelId: null,
     items: [createEmptyItem()],
     extraAdjustments: [],
     discountAdjustments: [],
     memo: "",
   };
+}
+
+function validateSaleOrderForm(form: SaleOrderFormInput): string | null {
+  const orderDate = form.orderDate.trim();
+  if (!orderDate) return "주문일을 입력해 주세요.";
+
+  const orderNo = form.orderNo.trim();
+  if (!orderNo) return "주문번호를 입력해 주세요.";
+  if (orderNo.length > 100) return "주문번호는 100자 이하여야 합니다.";
+
+  const customerName = form.customerName.trim();
+  if (!customerName) return "주문자명을 입력해 주세요.";
+  if (customerName.length > 100) return "주문자명은 100자 이하여야 합니다.";
+
+  if (form.items.length === 0) return "상품 행을 1개 이상 추가해 주세요.";
+
+  const itemsWithProduct = form.items.filter((item) => item.productId.trim());
+  if (itemsWithProduct.length === 0) return "상품을 1개 이상 선택해 주세요.";
+
+  for (const item of itemsWithProduct) {
+    const quantity = Math.trunc(Number(item.quantity));
+    if (quantity < 1) return "수량은 1개 이상이어야 합니다.";
+    const lineAmount = Math.trunc(Number(item.lineAmount));
+    if (lineAmount < 0) return "상품금액은 0 이상이어야 합니다.";
+  }
+
+  const extraWithoutLabel = form.extraAdjustments.find(
+    (item) => (Number(item.amount) || 0) > 0 && !item.label.trim(),
+  );
+  if (extraWithoutLabel) {
+    return "추가금 항목에 금액이 있으면 항목명을 입력해 주세요.";
+  }
+
+  const discountWithoutLabel = form.discountAdjustments.find(
+    (item) => (Number(item.amount) || 0) > 0 && !item.label.trim(),
+  );
+  if (discountWithoutLabel) {
+    return "할인 항목에 금액이 있으면 항목명을 입력해 주세요.";
+  }
+
+  const memo = form.memo?.trim() ?? "";
+  if (memo.length > 500) return "비고는 500자 이하여야 합니다.";
+
+  return null;
+}
+
+function formInputToPayload(input: SaleOrderFormInput) {
+  return toSaleOrderPayload({
+    orderDate: input.orderDate,
+    orderNo: input.orderNo,
+    customerName: input.customerName,
+    channelId: input.channelId,
+    items: input.items.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      lineAmount: item.lineAmount,
+    })),
+    extraAdjustments: input.extraAdjustments,
+    discountAdjustments: input.discountAdjustments,
+    memo: input.memo,
+  });
 }
 
 interface SaleRegisterDialogProps {
@@ -107,18 +176,29 @@ function SaleRegisterDialog({
   onSave,
   onUpdate,
 }: SaleRegisterDialogProps) {
-  const { alert } = useAppDialog();
   const isEdit = !!editOrder;
+  const readOnly = editOrder?.status === "cancelled";
   const [form, setForm] = useState<SaleOrderFormInput>(createEmptyInput);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const formSessionRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      formSessionRef.current = null;
+      return;
+    }
+
+    const sessionKey = editOrder ? `edit:${editOrder.id}` : "new";
+    if (formSessionRef.current === sessionKey) return;
+    formSessionRef.current = sessionKey;
+
     if (editOrder) {
       setForm({
         orderDate: editOrder.orderDate,
         orderNo: editOrder.orderNo,
         customerName: editOrder.customerName,
-        channel: editOrder.channel ?? "",
+        channelId: editOrder.channelId,
         items: editOrder.items.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -142,13 +222,17 @@ function SaleRegisterDialog({
               : [],
         memo: editOrder.memo ?? "",
       });
+      setError(null);
       return;
     }
     setForm(createEmptyInput());
-  }, [open, editOrder]);
+    setError(null);
+  }, [open, editOrder, getSuggestedUnitPrice]);
 
   const patch = (p: Partial<SaleOrderFormInput>) => {
+    if (readOnly) return;
     setForm((prev) => ({ ...prev, ...p }));
+    setError(null);
   };
   const patchItem = (index: number, p: Partial<SaleOrderItemInput>) => {
     setForm((prev) => ({
@@ -179,6 +263,7 @@ function SaleRegisterDialog({
         item.id === id ? { ...item, ...patchValue } : item,
       ),
     }));
+    setError(null);
   };
   const addAdjustment = (key: "extraAdjustments" | "discountAdjustments") => {
     setForm((prev) => ({ ...prev, [key]: [...prev[key], createEmptyAdjustment()] }));
@@ -211,16 +296,16 @@ function SaleRegisterDialog({
   );
 
   const submit = async () => {
+    if (readOnly) return;
+
+    const validationError = validateSaleOrderForm(form);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     const orderNo = form.orderNo.trim();
     const customerName = form.customerName.trim();
-    if (!orderNo || !customerName) {
-      await alert("주문번호, 주문자명을 입력해 주세요.");
-      return;
-    }
-    if (form.items.length === 0) {
-      await alert("상품 행을 1개 이상 추가해 주세요.");
-      return;
-    }
 
     const normalizedItems = form.items
       .map((item) => ({
@@ -231,38 +316,40 @@ function SaleRegisterDialog({
       }))
       .filter((item) => !!item.productId);
 
-    if (normalizedItems.length === 0) {
-      await alert("상품을 1개 이상 선택해 주세요.");
-      return;
-    }
-
-    const invalid = normalizedItems.find((item) => item.quantity <= 0);
-    if (invalid) {
-      await alert("수량은 1개 이상이어야 합니다.");
-      return;
-    }
-
     const nextInput: SaleOrderFormInput = {
       ...form,
+      orderDate: form.orderDate.trim(),
       orderNo,
       customerName,
       items: normalizedItems,
       extraAdjustments: form.extraAdjustments
-        .map((item) => ({ ...item, label: item.label.trim(), amount: Math.max(0, item.amount) }))
-        .filter((item) => item.amount > 0),
+        .map((item) => ({
+          ...item,
+          label: item.label.trim(),
+          amount: Math.max(0, Number(item.amount) || 0),
+        }))
+        .filter((item) => item.label.length >= 1 && item.amount > 0),
       discountAdjustments: form.discountAdjustments
-        .map((item) => ({ ...item, label: item.label.trim(), amount: Math.max(0, item.amount) }))
-        .filter((item) => item.amount > 0),
+        .map((item) => ({
+          ...item,
+          label: item.label.trim(),
+          amount: Math.max(0, Number(item.amount) || 0),
+        }))
+        .filter((item) => item.label.length >= 1 && item.amount > 0),
       memo: form.memo?.trim() || "",
     };
 
-    if (isEdit && editOrder) {
-      await onUpdate(editOrder.id, nextInput);
-    } else {
-      await onSave(nextInput);
+    setSubmitting(true);
+    try {
+      if (isEdit && editOrder) {
+        await onUpdate(editOrder.id, nextInput);
+      } else {
+        await onSave(nextInput);
+      }
+      onOpenChange(false);
+    } finally {
+      setSubmitting(false);
     }
-    onOpenChange(false);
-    await alert(isEdit ? "매출이 저장되었습니다." : "매출이 등록되었습니다.");
   };
 
   return (
@@ -272,14 +359,30 @@ function SaleRegisterDialog({
         aria-describedby={undefined}
       >
         <DialogHeader className="border-b border-[var(--color-border)] px-5 py-4">
-          <DialogTitle>{isEdit ? "매출 수정" : "매출 등록"}</DialogTitle>
-          <DialogDescription>주문 확정 건을 수동으로 기록합니다.</DialogDescription>
+          <DialogTitle>{isEdit ? "매출 상세" : "매출 등록"}</DialogTitle>
+          <DialogDescription>
+            {readOnly
+              ? "취소된 주문은 조회만 가능합니다."
+              : "주문 확정 건을 수동으로 기록합니다."}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {readOnly ? (
+            <p className="mb-4 rounded-lg border border-[var(--color-warning)]/40 bg-amber-50 px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+              취소된 주문은 수정할 수 없습니다.
+            </p>
+          ) : null}
+          {error ? (
+            <p className="mb-4 rounded-lg border border-[var(--color-danger)]/30 bg-red-50 px-3 py-2 text-sm text-[var(--color-danger)]">
+              {error}
+            </p>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="sale-date">주문일</Label>
+              <Label htmlFor="sale-date">
+                주문일 <span className="text-[var(--color-danger)]">*</span>
+              </Label>
               <Input
                 id="sale-date"
                 type="date"
@@ -288,7 +391,9 @@ function SaleRegisterDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="sale-order-no">주문번호</Label>
+              <Label htmlFor="sale-order-no">
+                주문번호 <span className="text-[var(--color-danger)]">*</span>
+              </Label>
               <Input
                 id="sale-order-no"
                 value={form.orderNo}
@@ -297,7 +402,9 @@ function SaleRegisterDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="sale-customer">주문자명</Label>
+              <Label htmlFor="sale-customer">
+                주문자명 <span className="text-[var(--color-danger)]">*</span>
+              </Label>
               <Input
                 id="sale-customer"
                 value={form.customerName}
@@ -305,30 +412,33 @@ function SaleRegisterDialog({
                 placeholder="예: 홍길동"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="sale-channel">판매채널</Label>
-              <select
-                id="sale-channel"
-                value={form.channel}
-                onChange={(e) => patch({ channel: e.target.value })}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="">선택 안 함</option>
-                {SALE_CHANNELS.map((ch) => (
-                  <option key={ch} value={ch}>
-                    {ch}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SaleChannelSelectField
+              channelId={form.channelId}
+              channelSnapshot={editOrder?.channel}
+              disabled={readOnly}
+              onChannelIdChange={(id) => patch({ channelId: id })}
+            />
             <div className="space-y-1.5 sm:col-span-2">
               <div className="flex items-center justify-between">
-                <Label>주문항목</Label>
+                <Label>
+                  주문항목 <span className="text-[var(--color-danger)]">*</span>
+                </Label>
                 <Button type="button" variant="outline" size="sm" onClick={addItem}>
                   + 상품 행 추가
                 </Button>
               </div>
               <div className="space-y-2 rounded-lg border border-[var(--color-border)] p-3">
+                <div className="hidden gap-2 text-xs text-[var(--color-text-muted)] sm:grid sm:grid-cols-12">
+                  <span className="sm:col-span-6">
+                    상품 <span className="text-[var(--color-danger)]">*</span>
+                  </span>
+                  <span className="sm:col-span-2">
+                    수량 <span className="text-[var(--color-danger)]">*</span>
+                  </span>
+                  <span className="sm:col-span-3">
+                    상품금액 <span className="text-[var(--color-danger)]">*</span>
+                  </span>
+                </div>
                 {form.items.map((item, index) => (
                   <div
                     key={`item-${index}`}
@@ -422,15 +532,25 @@ function SaleRegisterDialog({
                 ) : (
                   form.extraAdjustments.map((item) => (
                     <div key={item.id} className="grid grid-cols-12 gap-2">
-                      <Input
+                      <div className="col-span-6 space-y-1">
+                        <p className="text-[10px] text-[var(--color-text-muted)]">
+                          항목명
+                          {(Number(item.amount) || 0) > 0 ? (
+                            <span className="text-[var(--color-danger)]"> *</span>
+                          ) : null}
+                        </p>
+                        <Input
                         value={item.label}
                         onChange={(e) =>
                           updateAdjustment("extraAdjustments", item.id, { label: e.target.value })
                         }
                         placeholder="예: 배송비"
-                        className="col-span-6 h-8"
+                        className="h-8"
                       />
-                      <Input
+                      </div>
+                      <div className="col-span-4 space-y-1">
+                        <p className="text-[10px] text-[var(--color-text-muted)]">금액</p>
+                        <Input
                         type="number"
                         min={0}
                         value={item.amount || ""}
@@ -440,8 +560,9 @@ function SaleRegisterDialog({
                           })
                         }
                         placeholder="0"
-                        className="col-span-4 h-8"
+                        className="h-8"
                       />
+                      </div>
                       <Button
                         type="button"
                         variant="outline"
@@ -474,7 +595,14 @@ function SaleRegisterDialog({
                 ) : (
                   form.discountAdjustments.map((item) => (
                     <div key={item.id} className="grid grid-cols-12 gap-2">
-                      <Input
+                      <div className="col-span-6 space-y-1">
+                        <p className="text-[10px] text-[var(--color-text-muted)]">
+                          항목명
+                          {(Number(item.amount) || 0) > 0 ? (
+                            <span className="text-[var(--color-danger)]"> *</span>
+                          ) : null}
+                        </p>
+                        <Input
                         value={item.label}
                         onChange={(e) =>
                           updateAdjustment("discountAdjustments", item.id, {
@@ -482,9 +610,12 @@ function SaleRegisterDialog({
                           })
                         }
                         placeholder="예: 쿠폰"
-                        className="col-span-6 h-8"
+                        className="h-8"
                       />
-                      <Input
+                      </div>
+                      <div className="col-span-4 space-y-1">
+                        <p className="text-[10px] text-[var(--color-text-muted)]">금액</p>
+                        <Input
                         type="number"
                         min={0}
                         value={item.amount || ""}
@@ -494,8 +625,9 @@ function SaleRegisterDialog({
                           })
                         }
                         placeholder="0"
-                        className="col-span-4 h-8"
+                        className="h-8"
                       />
+                      </div>
                       <Button
                         type="button"
                         variant="outline"
@@ -531,11 +663,13 @@ function SaleRegisterDialog({
 
         <DialogFooter className={MODAL_DIALOG_FOOTER_CLASS}>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            취소
+            {readOnly ? "닫기" : "취소"}
           </Button>
-          <Button type="button" onClick={() => void submit()}>
-            {isEdit ? "저장" : "등록"}
-          </Button>
+          {!readOnly ? (
+            <Button type="button" disabled={submitting} onClick={() => void submit()}>
+              {submitting ? "저장 중…" : isEdit ? "저장" : "등록"}
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -544,136 +678,72 @@ function SaleRegisterDialog({
 
 export function SaleTabPanel() {
   const { alert, confirm } = useAppDialog();
-  const [orders, setOrders] = useState<SaleOrder[]>(() =>
-    createPubSeedSaleOrders(todayIso()),
-  );
-  const [products, setProducts] = useState<InventoryProduct[]>([]);
-  const { search, setSearch } = useLedgerUrlSearch();
+  const month = useLedgerMonthParam();
+  const { search, committedSearch, setSearch, applySearch } = useLedgerUrlSearch({
+    commit: "manual",
+  });
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editOrderId, setEditOrderId] = useState<string | null>(null);
 
+  useEffect(() => {
+    setPage(1);
+  }, [month, committedSearch]);
+
+  const {
+    data: listData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useSaleOrderList(committedSearch, page);
+
+  const { data: productsData } = useQuery({
+    queryKey: PRODUCTS_PICKER_QUERY_KEY,
+    queryFn: () => fetchProducts({ active: true, limit: 100, page: 1 }),
+    staleTime: 60_000,
+  });
+
+  useQuery({
+    queryKey: SALES_CHANNELS_QUERY_KEY,
+    queryFn: fetchSalesChannels,
+    staleTime: 60_000,
+  });
+
+  const createOrder = useCreateSaleOrder();
+  const updateOrder = useUpdateSaleOrder();
+  const patchCancel = usePatchSaleOrderCancel();
+  const deleteOrder = useDeleteSaleOrder();
+
+  const orders = listData?.orders ?? [];
+  const listMeta = listData?.meta;
+  const listTotal = listMeta?.total ?? 0;
+  const listPage = listMeta?.page ?? page;
+  const listLimit = listMeta?.limit ?? 8;
+  const totalPages = Math.max(1, Math.ceil(listTotal / listLimit));
+  const todayTotal = listMeta?.todayTotal ?? 0;
+  const monthTotal = listMeta?.monthTotal ?? 0;
+
   const editOrder = orders.find((o) => o.id === editOrderId) ?? null;
+
   const visibleProducts = useMemo(
-    () => products.filter((p) => !p.deletedAtIso),
-    [products],
+    () => (productsData?.items ?? []).filter((p) => !p.deletedAtIso),
+    [productsData?.items],
   );
+
   const suggestedUnitPriceByProductId = useMemo(() => {
     const map = new Map<string, number>();
-    products.forEach((product) => {
-      if (product.deletedAtIso) return;
+    visibleProducts.forEach((product) => {
       map.set(product.id, Math.max(0, Number(product.currentPrice) || 0));
     });
     return map;
-  }, [products]);
+  }, [visibleProducts]);
 
-  useEffect(() => {
-    const raw = globalThis.localStorage?.getItem(PRODUCTS_STORAGE_KEY);
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as InventoryProduct[];
-      if (Array.isArray(parsed)) setProducts(parsed);
-    } catch {
-      // ignore parse failure
-    }
-  }, []);
-
-  const persistProducts = (next: InventoryProduct[]) => {
-    setProducts(next);
-    globalThis.localStorage?.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(next));
-  };
-
-  const toQtyMap = (items: { productId: string; quantity: number }[]) => {
-    const map = new Map<string, number>();
-    for (const item of items) {
-      const prev = map.get(item.productId) ?? 0;
-      map.set(item.productId, prev + item.quantity);
-    }
-    return map;
-  };
-
-  const canDeductStock = (items: { productId: string; quantity: number }[]): boolean => {
-    const map = toQtyMap(items);
-    for (const [productId, qty] of map.entries()) {
-      const target = products.find((p) => p.id === productId && !p.deletedAtIso);
-      if (!target || target.stock < qty) return false;
-    }
-    return true;
-  };
-
-  const applyStock = (
-    prev: InventoryProduct[],
-    items: { productId: string; quantity: number }[],
-    delta: number,
-    reason: string,
-  ): InventoryProduct[] => {
-    const map = toQtyMap(items);
-    return prev.map((p) => {
-      const qty = map.get(p.id);
-      if (!qty) return p;
-      const nextStock = p.stock + delta * qty;
-      const nextHistory: InventoryStockHistoryItem = {
-        id: `stk-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
-        atIso: new Date().toISOString(),
-        delta: delta * qty,
-        source: "sale",
-        reason,
-      };
-      return {
-        ...p,
-        stock: Math.max(0, nextStock),
-        updatedAtIso: new Date().toISOString(),
-        stockHistory: [nextHistory, ...p.stockHistory],
-      };
-    });
-  };
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return orders;
-    return orders.filter((o) =>
-      [
-        o.orderNo,
-        o.customerName,
-        o.items.map((item) => item.productName).join(" "),
-        o.memo ?? "",
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [orders, search]);
-
-  const sorted = useMemo(
-    () =>
-      [...filtered].sort((a, b) => {
-        if (a.orderDate !== b.orderDate) return b.orderDate.localeCompare(a.orderDate);
-        return b.id.localeCompare(a.id);
-      }),
-    [filtered],
-  );
-
-  const { items: pagedOrders, totalPages, page: safePage } = useMemo(
-    () => paginate(sorted, page, SALE_PAGE_SIZE),
-    [sorted, page],
-  );
-
-  const today = todayIso();
-  const monthPrefix = today.slice(0, 7);
-  const todaySales = useMemo(
-    () =>
-      orders
-        .filter((o) => o.orderDate === today && o.status === "normal")
-        .reduce((sum, o) => sum + o.totalAmount, 0),
-    [orders, today],
-  );
-  const monthSales = useMemo(
-    () =>
-      orders
-        .filter((o) => o.orderDate.startsWith(monthPrefix) && o.status === "normal")
-        .reduce((sum, o) => sum + o.totalAmount, 0),
-    [orders, monthPrefix],
-  );
+  const canRegisterSale = visibleProducts.length > 0;
+  const hasCommittedSearch = committedSearch.trim().length > 0;
+  const showCatalogEmpty =
+    !hasCommittedSearch && !isLoading && !isError && listTotal === 0;
+  const listErrorMessage = isError ? getSaleErrorMessage(error) : null;
 
   const openRegister = () => {
     setEditOrderId(null);
@@ -685,50 +755,49 @@ export function SaleTabPanel() {
     setDialogOpen(true);
   };
 
+  const handleOpenRegister = async () => {
+    if (!canRegisterSale) {
+      await alert("상품관리에서 상품을 먼저 등록해 주세요.");
+      return;
+    }
+    openRegister();
+  };
+
+  const handleSave = async (input: SaleOrderFormInput) => {
+    await createOrder.mutateAsync(formInputToPayload(input));
+    setDialogOpen(false);
+    await alert("매출이 등록되었습니다.");
+  };
+
+  const handleUpdate = async (orderId: string, input: SaleOrderFormInput) => {
+    const target = orders.find((o) => o.id === orderId);
+    if (target?.status === "cancelled") {
+      await alert("취소된 주문은 수정할 수 없습니다.");
+      return;
+    }
+    await updateOrder.mutateAsync({
+      id: orderId,
+      body: formInputToPayload(input),
+    });
+    setEditOrderId(null);
+    setDialogOpen(false);
+    await alert("매출이 저장되었습니다.");
+  };
+
   const toggleCancel = async (order: SaleOrder) => {
-    const nextStatus = order.status === "normal" ? "cancelled" : "normal";
+    const cancel = order.status === "normal";
     const ok = await confirm({
-      title: nextStatus === "cancelled" ? "주문 취소 처리" : "주문 취소 해제",
-      message:
-        nextStatus === "cancelled"
-          ? "이 주문을 취소 상태로 변경할까요?"
-          : "이 주문을 정상 상태로 변경할까요?",
+      title: cancel ? "주문 취소 처리" : "주문 취소 해제",
+      message: cancel
+        ? "이 주문을 취소 상태로 변경할까요? 재고가 복구됩니다."
+        : "이 주문을 정상 상태로 변경할까요? 재고가 다시 차감됩니다.",
       confirmLabel: "적용",
-      destructive: nextStatus === "cancelled",
+      destructive: cancel,
     });
     if (!ok) return;
 
-    if (nextStatus === "normal" && !canDeductStock(order.items)) {
-      await alert("재고가 부족해서 취소 해제할 수 없습니다.");
-      return;
-    }
-
-    if (nextStatus === "cancelled") {
-      persistProducts(
-        applyStock(
-          products,
-          order.items,
-          1,
-          `매출 취소 복구 (${order.orderNo})`,
-        ),
-      );
-    } else {
-      persistProducts(
-        applyStock(
-          products,
-          order.items,
-          -1,
-          `매출 차감 (${order.orderNo})`,
-        ),
-      );
-    }
-
-    setOrders((prev) =>
-      prev.map((item) =>
-        item.id === order.id ? { ...item, status: nextStatus } : item,
-      ),
-    );
-    await alert(nextStatus === "cancelled" ? "취소 처리되었습니다." : "정상 처리되었습니다.");
+    await patchCancel.mutateAsync({ id: order.id, cancel });
+    await alert(cancel ? "취소 처리되었습니다." : "정상 처리되었습니다.");
   };
 
   const removeOrder = async (order: SaleOrder) => {
@@ -745,21 +814,8 @@ export function SaleTabPanel() {
     });
     if (!ok) return;
 
-    // 도달 시점에 status === "cancelled" 보장됨 (위 guard)
-    // 재고는 취소처리(toggleCancel) 시 이미 복구됨
-
-    setOrders((prev) => prev.filter((o) => o.id !== order.id));
+    await deleteOrder.mutateAsync(order.id);
     await alert("삭제되었습니다.");
-  };
-
-  const hasOrders = orders.length > 0;
-  const canRegisterSale = visibleProducts.length > 0;
-  const handleOpenRegister = async () => {
-    if (!canRegisterSale) {
-      await alert("상품관리에서 상품을 먼저 등록해 주세요.");
-      return;
-    }
-    openRegister();
   };
 
   return (
@@ -768,18 +824,18 @@ export function SaleTabPanel() {
         <div className="border-b border-[var(--color-border)] p-4 sm:border-b-0 sm:border-r">
           <p className="text-xs text-[var(--color-text-secondary)]">오늘 매출</p>
           <p className="mt-1 text-lg font-semibold tabular-nums">
-            {formatAmount(todaySales)}원
+            {formatAmount(todayTotal)}원
           </p>
         </div>
         <div className="p-4">
           <p className="text-xs text-[var(--color-text-secondary)]">이번달 매출</p>
           <p className="mt-1 text-lg font-semibold tabular-nums">
-            {formatAmount(monthSales)}원
+            {formatAmount(monthTotal)}원
           </p>
         </div>
       </div>
 
-      {!hasOrders ? (
+      {showCatalogEmpty ? (
         <LedgerEmptyState
           title="매출"
           description={
@@ -795,23 +851,42 @@ export function SaleTabPanel() {
           <PurchaseListToolbar
             embedded
             search={search}
-            onSearchChange={(value) => {
-              setSearch(value);
+            onSearchChange={setSearch}
+            searchSubmitMode
+            onSearchSubmit={() => {
+              applySearch();
+              setPage(1);
+            }}
+            onSearchClear={() => {
+              applySearch("");
               setPage(1);
             }}
             searchPlaceholder="주문번호, 주문자명, 상품명 검색"
             registerLabel="+ 매출 등록"
             onRegister={() => void handleOpenRegister()}
           />
-          {filtered.length === 0 ? (
+          {isLoading && orders.length === 0 ? (
             <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
-              검색 결과가 없습니다.
+              매출 목록을 불러오는 중입니다.
+            </p>
+          ) : isError ? (
+            <div className="flex flex-col items-center gap-3 py-12">
+              <p className="text-sm text-[var(--color-danger)]">{listErrorMessage}</p>
+              <Button type="button" variant="outline" size="sm" onClick={() => void refetch()}>
+                다시 시도
+              </Button>
+            </div>
+          ) : orders.length === 0 ? (
+            <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
+              {hasCommittedSearch
+                ? "검색 결과가 없습니다."
+                : "이번 달 매출 내역이 없습니다."}
             </p>
           ) : (
             <>
               <div className={ledgerListBodyClass}>
                 <SaleOrderList
-                  orders={pagedOrders}
+                  orders={orders}
                   onEdit={openEdit}
                   onToggleCancel={toggleCancel}
                   onRemove={removeOrder}
@@ -819,7 +894,7 @@ export function SaleTabPanel() {
               </div>
               <div className={ledgerListFooterClass}>
                 <PurchaseListPagination
-                  page={safePage}
+                  page={listPage}
                   totalPages={totalPages}
                   onPageChange={setPage}
                 />
@@ -840,124 +915,8 @@ export function SaleTabPanel() {
         getSuggestedUnitPrice={(productId) =>
           suggestedUnitPriceByProductId.get(productId) ?? 0
         }
-        onSave={(input) => {
-          if (!canDeductStock(input.items)) {
-            void alert("재고가 부족합니다. 수량을 확인해 주세요.");
-            return;
-          }
-          persistProducts(
-            applyStock(
-              products,
-              input.items,
-              -1,
-              `매출 차감 (${input.orderNo})`,
-            ),
-          );
-          const snapshotItems: SaleOrderItem[] = input.items.map((item) => {
-            const product = products.find((p) => p.id === item.productId);
-            return {
-              productId: item.productId,
-              productSku: product?.sku ?? "",
-              productName: product?.name ?? "",
-              quantity: item.quantity,
-              lineAmount: item.lineAmount,
-            };
-          });
-          const totalAmount = Math.max(
-            0,
-            snapshotItems.reduce((sum, item) => sum + item.lineAmount, 0) +
-              input.extraAdjustments.reduce((sum, item) => sum + item.amount, 0) -
-              input.discountAdjustments.reduce((sum, item) => sum + item.amount, 0),
-          );
-          setOrders((prev) => [
-            ...prev,
-            {
-              id: newOrderId(),
-              orderDate: input.orderDate,
-              orderNo: input.orderNo,
-              customerName: input.customerName,
-              channel: input.channel || undefined,
-              items: snapshotItems,
-              extraAdjustments: input.extraAdjustments,
-              discountAdjustments: input.discountAdjustments,
-              extraAmount: input.extraAdjustments.reduce((sum, item) => sum + item.amount, 0),
-              discountAmount: input.discountAdjustments.reduce((sum, item) => sum + item.amount, 0),
-              totalAmount,
-              memo: input.memo,
-              status: "normal",
-            },
-          ]);
-        }}
-        onUpdate={(orderId, input) => {
-          const target = orders.find((o) => o.id === orderId);
-          if (!target) return;
-
-          let nextProducts = products;
-          if (target.status === "normal") {
-            nextProducts = applyStock(
-              nextProducts,
-              target.items,
-              1,
-              `매출 수정 복구 (${target.orderNo})`,
-            );
-            const map = new Map<string, number>();
-            input.items.forEach((item) => {
-              map.set(item.productId, (map.get(item.productId) ?? 0) + item.quantity);
-            });
-            const insufficient = [...map.entries()].some(([productId, qty]) => {
-              const product = nextProducts.find((p) => p.id === productId);
-              return !product || product.stock < qty;
-            });
-            if (insufficient) {
-              void alert("재고가 부족해서 수정할 수 없습니다.");
-              return;
-            }
-            nextProducts = applyStock(
-              nextProducts,
-              input.items,
-              -1,
-              `매출 수정 차감 (${input.orderNo})`,
-            );
-          }
-          persistProducts(nextProducts);
-
-          const snapshotItems: SaleOrderItem[] = input.items.map((item) => {
-            const product = nextProducts.find((p) => p.id === item.productId);
-            return {
-              productId: item.productId,
-              productSku: product?.sku ?? "",
-              productName: product?.name ?? "",
-              quantity: item.quantity,
-              lineAmount: item.lineAmount,
-            };
-          });
-          const totalAmount = Math.max(
-            0,
-            snapshotItems.reduce((sum, item) => sum + item.lineAmount, 0) +
-              input.extraAdjustments.reduce((sum, item) => sum + item.amount, 0) -
-              input.discountAdjustments.reduce((sum, item) => sum + item.amount, 0),
-          );
-          setOrders((prev) =>
-            prev.map((item) =>
-              item.id === orderId
-                  ? {
-                    ...item,
-                    orderDate: input.orderDate,
-                    orderNo: input.orderNo,
-                    customerName: input.customerName,
-                    channel: input.channel || undefined,
-                    items: snapshotItems,
-                    extraAdjustments: input.extraAdjustments,
-                    discountAdjustments: input.discountAdjustments,
-                    extraAmount: input.extraAdjustments.reduce((sum, adj) => sum + adj.amount, 0),
-                    discountAmount: input.discountAdjustments.reduce((sum, adj) => sum + adj.amount, 0),
-                    totalAmount,
-                    memo: input.memo,
-                  }
-                : item,
-            ),
-          );
-        }}
+        onSave={handleSave}
+        onUpdate={handleUpdate}
       />
     </>
   );
