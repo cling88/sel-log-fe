@@ -25,13 +25,21 @@ function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
 
 function DialogOverlay({
   className,
+  nested,
   ...props
-}: DialogPrimitive.Backdrop.Props) {
+}: DialogPrimitive.Backdrop.Props & {
+  nested?: boolean
+}) {
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
+      /** Base UI는 nested dialog의 backdrop을 기본 비표시 — forceRender로 블러 오버레이 활성화 */
+      forceRender={nested}
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        nested
+          ? "z-[100] bg-black/50 backdrop-blur-md"
+          : "z-50 bg-black/10 supports-backdrop-filter:backdrop-blur-xs",
         className
       )}
       {...props}
@@ -43,17 +51,21 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  nested = false,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  /** 등록 모달 위에 뜨는 선택·관리 모달 — 뒤 모달과 구분되도록 어두운 배경 */
+  nested?: boolean
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay nested={nested} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          nested ? "z-[101] shadow-xl ring-foreground/15" : "z-50",
           className
         )}
         {...props}

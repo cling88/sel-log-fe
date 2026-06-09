@@ -13,6 +13,13 @@ export interface ProductPurchaseLine
   vendor: string;
   quantity: number;
   paymentAmount: number;
+  /** BE §15 — 직전 결제금액·수량 */
+  previousPaymentAmount?: number | null;
+  previousQuantity?: number | null;
+  /** BE 계산값 (없으면 FE에서 paymentAmount÷quantity) */
+  unitPrice?: number | null;
+  previousUnitPrice?: number | null;
+  amountAmendedAtIso?: string | null;
   memo: string;
   stockReflected: boolean;
   /** 재고반영 시 선택한 상품관리 SKU */

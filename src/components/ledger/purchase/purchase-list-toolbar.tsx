@@ -18,6 +18,7 @@ interface PurchaseListToolbarProps {
   onRegister?: () => void;
   /** 목록 카드 상단에 붙일 때 true */
   embedded?: boolean;
+  className?: string;
 }
 
 export function PurchaseListToolbar({
@@ -30,6 +31,7 @@ export function PurchaseListToolbar({
   registerLabel,
   onRegister,
   embedded = false,
+  className,
 }: PurchaseListToolbarProps) {
   return (
     <div
@@ -38,6 +40,7 @@ export function PurchaseListToolbar({
         embedded
           ? "border-b border-[var(--color-border)] bg-[var(--color-bg-card)]"
           : "rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-card)] shadow-[var(--shadow-sm)]",
+        className,
       )}
     >
       <div

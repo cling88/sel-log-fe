@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Plus, X } from "lucide-react";
+import { LedgerPickerTrigger } from "@/components/ledger/ledger-picker-trigger";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -271,28 +272,18 @@ export function ProductRegisterDialog({
               />
             </div>
 
-            <div className="space-y-1.5 sm:col-span-2">
-              <div className="flex items-center justify-between gap-2">
-                <Label>카테고리</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 shrink-0 whitespace-nowrap"
-                  onClick={() => onOpenCategoryManage(form.category ?? "")}
-                >
-                  선택
-                </Button>
-              </div>
-              <div className="flex h-9 items-center rounded-lg border border-[var(--color-border)] bg-white px-3 text-sm text-[var(--color-text-primary)]">
-                {form.category?.trim() ? form.category : "선택"}
-              </div>
-              {categories.length === 0 ? (
-                <p className="text-xs text-[var(--color-text-muted)]">
-                  카테고리가 없습니다. 선택 버튼에서 추가해 주세요.
-                </p>
-              ) : null}
-            </div>
+            <LedgerPickerTrigger
+              className="sm:col-span-2"
+              label="카테고리"
+              displayValue={form.category?.trim() ? form.category : "선택"}
+              isEmpty={!form.category?.trim()}
+              onOpen={() => onOpenCategoryManage(form.category ?? "")}
+              emptyHint={
+                categories.length === 0
+                  ? "카테고리가 없습니다. 클릭하여 추가해 주세요."
+                  : undefined
+              }
+            />
 
             {isEdit ? (
               <div className="space-y-1.5 sm:col-span-2">

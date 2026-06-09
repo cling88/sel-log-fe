@@ -19,11 +19,7 @@ import {
   useUpdateProductPurchaseLine,
 } from "@/hooks/use-purchase";
 import { LedgerEmptyState } from "@/components/ledger/empty-state";
-import {
-  LedgerListShell,
-  ledgerListBodyClass,
-  ledgerListFooterClass,
-} from "@/components/ledger/ledger-list-shell";
+import { LedgerListShell } from "@/components/ledger/ledger-list-shell";
 import { LedgerStockReflectDialog } from "@/components/ledger/purchase/ledger-stock-reflect-dialog";
 import { ProductPurchaseGroupEditDialog } from "@/components/ledger/purchase/product-purchase-group-edit-dialog";
 import { ProductPurchaseGroupList } from "@/components/ledger/purchase/product-purchase-group-list";
@@ -394,9 +390,10 @@ export function ProductPurchasePanel() {
           onAction={() => openRegister()}
         />
       ) : (
-        <LedgerListShell>
+        <LedgerListShell className="border-0 bg-transparent shadow-none">
           <PurchaseListToolbar
             embedded
+            className="border-[var(--color-border)]/50 bg-transparent px-0 py-2"
             search={search}
             onSearchChange={setSearch}
             searchSubmitMode
@@ -433,7 +430,7 @@ export function ProductPurchasePanel() {
             </p>
           ) : (
             <>
-              <div className={ledgerListBodyClass}>
+              <div className="space-y-2">
                 <ProductPurchaseGroupList
                   groups={groups}
                   onAddToGroup={(date) => openRegister(date)}
@@ -456,7 +453,7 @@ export function ProductPurchasePanel() {
                   }
                 />
               </div>
-              <div className={ledgerListFooterClass}>
+              <div className="border-t border-[var(--color-border)]/40 px-0 py-1.5">
                 <PurchaseListPagination
                   page={listPage}
                   totalPages={totalPages}

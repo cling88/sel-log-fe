@@ -11,11 +11,11 @@ export function ProductPurchaseDateTotals({
   totals,
 }: ProductPurchaseDateTotalsProps) {
   return (
-    <div className="mt-3 space-y-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/80 px-3 py-2.5">
-      <p className="text-[11px] font-medium text-[var(--color-text-secondary)]">
+    <div className="mt-2 space-y-0.5 border-t border-[var(--color-border)]/50 pt-2">
+      <p className="text-[11px] font-medium text-[var(--color-text-muted)]">
         결제일 합계
       </p>
-      <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-[13px] tabular-nums">
+      <div className="flex flex-wrap items-center justify-end gap-x-2.5 gap-y-1 text-[13px] tabular-nums">
         <span className="text-[var(--color-text-muted)]">주문금액</span>
         <span className="font-medium text-[var(--color-text-primary)]">
           {formatAmount(totals.linesTotal)}원

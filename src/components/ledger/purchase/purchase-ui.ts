@@ -8,20 +8,41 @@ export function purchaseGroupCardClass(attention?: boolean) {
   );
 }
 
+/** 상품매입 — 중첩 border 최소화 */
+export function productPurchaseGroupCardClass(attention?: boolean) {
+  return cn(
+    "rounded-lg border border-[var(--color-border)]/70 bg-white",
+    attention && "border-l-[3px] border-l-[var(--primary-500)]",
+  );
+}
+
 export const purchaseGroupHeaderClass =
   "flex w-full items-center gap-2 px-2 py-1 text-left transition-colors hover:bg-[var(--primary-50)]/30";
+
+export const productPurchaseGroupHeaderClass =
+  "flex w-full items-center gap-2 px-1 py-0.5 text-left transition-colors hover:bg-[var(--primary-50)]/20";
 
 export const purchaseGroupBodyClass =
   "min-w-0 space-y-2 border-t border-[var(--color-border)] px-2.5 py-2";
 
+export const productPurchaseGroupBodyClass =
+  "min-w-0 space-y-2 border-t border-[var(--color-border)]/50 pl-3 pr-2 pb-1 pt-2 sm:pl-4";
+
 export const purchaseGroupFooterClass =
   "flex flex-wrap items-center justify-end gap-2 rounded-lg px-2.5 py-2";
+
+export const productPurchaseGroupFooterClass =
+  "flex flex-wrap items-center justify-end gap-1.5 border-t border-[var(--color-border)]/40 pl-3 pr-2 pt-2 sm:pl-4";
 
 /** PC 목록 테이블 */
 export const purchaseTableScrollClass = "overflow-x-auto";
 
 export const purchaseTableShellClass =
   "w-max min-w-full overflow-hidden rounded-lg border border-[var(--color-border)] bg-white";
+
+/** 상품매입 테이블 — 외곽 border 없음 */
+export const productPurchaseTableShellClass =
+  "w-max min-w-full overflow-hidden";
 
 export const purchaseTableHeaderCellClass =
   "flex min-h-8 items-center px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--color-text-muted)] bg-[var(--primary-50)]/50";

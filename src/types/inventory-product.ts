@@ -31,6 +31,8 @@ export interface InventoryPriceHistoryItem extends ProductChangeTags {
   id: string;
   atIso: string;
   price: number;
+  /** 직전 판매가 — 변경 이벤트만 (등록 최초 건은 null) */
+  previousPrice?: number | null;
   source: InventoryPriceHistorySource;
   reason?: string;
 }
@@ -47,6 +49,9 @@ export interface InventoryProduct extends ProductChangeTags {
   stock: number; // 현재 재고
   safetyStock: number; // 안전재고
   currentPrice: number; // 현재 판매가
+  /** 직전 판매가 (BE §15) */
+  previousPrice?: number | null;
+  priceAmendedAtIso?: string | null;
 
   createdAtIso: string;
   updatedAtIso: string;

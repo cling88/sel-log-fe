@@ -177,6 +177,15 @@ body {
   html {
     @apply font-sans;
   }
+
+  /* 중첩 모달(구매처·채널 등) 열림 시 뒤 모달 흐림 */
+  [data-slot="dialog-content"][data-nested-dialog-open] {
+    filter: blur(4px);
+    opacity: 0.72;
+    transition:
+      filter 100ms ease,
+      opacity 100ms ease;
+  }
 }
 
 @layer utilities {

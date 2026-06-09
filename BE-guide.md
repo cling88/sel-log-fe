@@ -263,7 +263,8 @@
 }
 ```
 
-> **제약**: `stockReflected: true` 라인은 수정 불가 처리 권장 (또는 FE에서 차단)
+> **제약**: `stockReflected: true` 라인은 수정 불가 처리 권장 (또는 FE에서 차단)  
+> **응답**: 금액·수량 변경 시 `previousPaymentAmount`, `previousQuantity`, `unitPrice`, `previousUnitPrice` 포함 — **§15-3**
 
 ---
 
@@ -901,7 +902,8 @@
 }
 ```
 
-> `sku`는 수정 불가 (변경 시 `400` 반환 권장)
+> `sku`는 수정 불가 (변경 시 `400` 반환 권장)  
+> 가격 변경 시 응답에 `previousPrice`, (선택) `priceAmendedAtIso` 포함 — **§15-2**
 
 ---
 
@@ -1658,4 +1660,218 @@
 
 ---
 
+## 15. 가격 수정 시 이전 금액 표시 (FE 연동 예정)
+
+> **목적**: 상품관리·상품매입에서 금액을 수정했을 때, FE가  
+> `~~이전금액~~` → `수정된 금액` (line-through + 신규 값) 형태로 표시할 수 있도록 BE가 **직전 값**을 내려준다.  
+> **우선순위**: P1 (상품 `currentPrice`, 상품매입 `paymentAmount` / 파생 단가)
+
+### 15-1. 설계 원칙
+
+| 원칙 | 내용 |
+|------|------|
+| **현재값 + 직전값** | 목록·상세·PATCH 응답에 `current` 필드와 짝이 되는 `previous*` 필드를 둔다 |
+| **null = 표시 안 함** | `previous*`가 `null`이거나 현재값과 같으면 FE는 취소선을 그리지 않음 |
+| **마지막 1회 수정만** | “몇 번 전 가격”이 아니라 **바로 이전 값 1개**만 유지 (다회 수정 이력은 `price_history` 등 기존 이력 API) |
+| **서버 계산** | FE에서 이전값을 추론하지 않음 — PATCH 직후·새로고침 후에도 동일하게 보이려면 BE가 보관·반환 |
+
+**FE 표시 규칙 (참고)**
+
+```text
+previousPrice != null && previousPrice !== currentPrice
+  →  <s>15,000원</s> 12,000원
+```
+
+---
+
+### 15-2. 상품관리 (`products`)
+
+#### 대상 필드
+
+| 필드 | 설명 |
+|------|------|
+| `currentPrice` | 현재 판매가 (기존) |
+| `previousPrice` | **신규** — 직전 `currentPrice`. 가격이 마지막으로 바뀐 뒤 유지 |
+
+#### 값을 세팅하는 시점
+
+| 이벤트 | `previousPrice` | `price_history` |
+|--------|-----------------|-----------------|
+| `POST /products` (등록) | `null` | `source: product_register`, `price = currentPrice` |
+| `PATCH /products/:id` — `currentPrice` **변경** | 변경 전 `currentPrice` 저장 | `source: manual_edit`, `price = 신규값`, **`previousPrice = 변경 전값`** |
+| `PATCH /products/:id` — `currentPrice` **동일** | 기존 `previousPrice` 유지 | 추가 없음 |
+| `POST .../stock-reflect` — 단가로 `currentPrice` 갱신 | 변경 전 `currentPrice` 저장 | `source: purchase`, `price = 신규값`, **`previousPrice = 변경 전값`** |
+| `currentPrice` 외 필드만 수정 | `previousPrice` 유지 | 가격 이력 추가 없음 |
+
+#### API 응답 확장
+
+**`GET /products`**, **`GET /products/:id`**, **`PATCH /products/:id`** 응답 `data`에 추가:
+
+```jsonc
+{
+  "id": "prd-001",
+  "currentPrice": 28000,
+  "previousPrice": 25000,           // null 가능
+  "priceAmendedAtIso": "2026-06-09T10:30:00Z"  // 선택. 마지막 가격 변경 시각
+}
+```
+
+- `priceAmendedAtIso`: FE 필수는 아님. 정렬·툴팁용으로 권장.
+
+#### 가격 이력 API 확장
+
+**`GET /products/:id/price-history`** 항목에 `previousPrice` 추가 (변경 이벤트만):
+
+```jsonc
+{
+  "id": "prh-002",
+  "atIso": "2026-06-09T10:30:00Z",
+  "price": 28000,
+  "previousPrice": 25000,          // 등록 최초 건(product_register)은 null
+  "source": "manual_edit",           // product_register | manual_edit | purchase
+  "reason": "상품 편집"
+}
+```
+
+> FE 이력 탭: `previousPrice`가 있으면 동일하게 취소선 + 신규 가격 표시.
+
+#### (선택) 목록용 경량 태그
+
+상세 없이 목록 카드만 갱신할 때, 기존 `changeKind` / `changeFrom` 패턴을 가격에도 쓸 수 있음:
+
+```jsonc
+{
+  "currentPrice": 28000,
+  "previousPrice": 25000,
+  "changeKind": "price",             // 선택
+  "changeFrom": "edit"               // edit | purchase (stock_adjust는 재고 전용)
+}
+```
+
+- 둘 다 있을 때만 FE가 「금액조정 · 편집수정」 뱃지 표시 (기존 규칙 유지).
+
+---
+
+### 15-3. 상품매입 라인 (`purchase/products`)
+
+#### 대상 필드
+
+| 필드 | 설명 |
+|------|------|
+| `paymentAmount` | 결제금액 (기존) |
+| `previousPaymentAmount` | **신규** — 직전 `paymentAmount` |
+| `quantity` | 기존 |
+| `previousQuantity` | **신규** — 직전 `quantity` (수량만 바뀐 경우 단가 비교용) |
+
+파생 단가는 **BE가 내려주거나 FE가 계산** — 권장은 응답에 명시 필드 포함:
+
+| 필드 | 계산 |
+|------|------|
+| `unitPrice` | `paymentAmount / quantity` (정수 반올림 정책은 기존 FE와 동일) |
+| `previousUnitPrice` | `previousPaymentAmount / previousQuantity` — 둘 중 하나라도 `null`이면 `null` |
+
+#### 값을 세팅하는 시점
+
+| 이벤트 | `previousPaymentAmount` / `previousQuantity` |
+|--------|--------------------------------------------------|
+| `POST /purchase/products` | 둘 다 `null` |
+| `PATCH /purchase/products/:id` — 금액 또는 수량 **변경** | 변경 전 `paymentAmount` / `quantity` 저장 |
+| `PATCH` — 금액·수량 **동일** | 기존 `previous*` 유지 |
+| `POST .../stock-reflect` | 라인 금액은 그대로 → `previous*` **변경 없음** (상품 마스터 가격 변경은 §15-2) |
+| `DELETE .../stock-reflect` | `previous*` 유지 |
+
+> **제약**: `stockReflected: true` 라인은 수정 불가(기존 §3-3). 이전 금액 필드는 **미반영·수정 가능 구간**에서만 의미 있음.
+
+#### API 응답 확장
+
+**`GET /purchase/products`**, **`PATCH /purchase/products/:id`** 의 각 라인 객체:
+
+```jsonc
+{
+  "id": "ppl-001",
+  "quantity": 10,
+  "paymentAmount": 140000,
+  "previousQuantity": 10,
+  "previousPaymentAmount": 150000,
+  "unitPrice": 14000,
+  "previousUnitPrice": 15000,
+  "amountAmendedAtIso": "2026-06-09T11:00:00Z"   // 선택
+}
+```
+
+**FE 표시 예 (상품매입 목록)**
+
+| 컬럼 | 표시 |
+|------|------|
+| 결제금액 | `~~150,000원~~` `140,000원` |
+| 개당금액 | `~~15,000원~~` `14,000원` |
+| 최종개당 | 구매처 그룹 배분 로직은 기존 FE 계산 유지. 그룹 합계가 바뀌면 해당 라인 `previous*`와 무관할 수 있음 → **라인 단위 금액·단가만** 이전값 표시 |
+
+#### 수정 이력 테이블 (권장)
+
+감사·월말 점검용으로 라인별 수정 로그를 남기려면:
+
+```sql
+purchase_product_line_amendments (
+  id,
+  line_id,
+  previous_payment_amount,
+  previous_quantity,
+  new_payment_amount,
+  new_quantity,
+  amended_at,
+  amended_by_user_id   -- nullable
+)
+```
+
+- 목록 API는 **마지막 1건**만 `previous*`로 노출해도 됨.
+- 전체 이력이 필요하면 추후 `GET /purchase/products/:id/amendments` (P2).
+
+---
+
+### 15-4. DB · 마이그레이션
+
+```sql
+-- products
+ALTER TABLE products
+  ADD COLUMN previous_price INTEGER NULL,
+  ADD COLUMN price_amended_at TIMESTAMPTZ NULL;
+
+-- product_price_history (기존 테이블)
+ALTER TABLE product_price_history
+  ADD COLUMN previous_price INTEGER NULL;
+
+-- purchase_product_lines
+ALTER TABLE purchase_product_lines
+  ADD COLUMN previous_payment_amount INTEGER NULL,
+  ADD COLUMN previous_quantity INTEGER NULL,
+  ADD COLUMN amount_amended_at TIMESTAMPTZ NULL;
+```
+
+- 기존 행: `previous_*` = `NULL` (취소선 없음).
+- backfill 불필요.
+
+---
+
+### 15-5. 비대상 · 추후
+
+| 구분 | 사유 |
+|------|------|
+| 부가(`purchase/supply`)·기타지출 | 금액 수정 빈도 낮음 — 필요 시 동일 패턴으로 `previousPaymentAmount` 확장 (P2) |
+| 매출 주문·항목 | 주문 수정 시 diff는 BE 내부 처리 중 — UI 취소선 요구 시 §15와 별도 스펙 (P2) |
+| `previous*` 영구 보관 | 다음 수정 시 **덮어쓰기** (직전 1회만). 장기 이력은 `price_history` / amendment 로그 |
+
+---
+
+### 15-6. FE 연동 체크리스트 (BE 완료 후)
+
+- [ ] `types/inventory-product.ts` — `previousPrice?`, `priceAmendedAtIso?`
+- [ ] `types/purchase-product.ts` — `previousPaymentAmount?`, `previousQuantity?`, `unitPrice?`, `previousUnitPrice?`
+- [ ] `price-history` 항목 — `previousPrice?`
+- [ ] 상품 상세·목록·상품매입 라인 테이블 — 공통 `AmendedAmount` UI (line-through + 신규값)
+- [ ] `normalizeProduct` / `normalizeProductPurchaseLine` 파서 반영
+
+---
+
+*v3.2 — §15 가격 수정 이전값 표시 스펙 추가 (2026-06-09)*  
 *v3.1 — 판매채널 필드 확장 요청 추가 (2026-06-04)*

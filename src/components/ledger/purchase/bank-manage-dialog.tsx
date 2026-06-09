@@ -112,6 +112,7 @@ export function BankManageDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        nested
         className="flex max-h-[min(85vh,560px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
         aria-describedby={undefined}
       >

@@ -25,16 +25,17 @@ interface ProductPurchaseGroupSummaryProps {
   onSave: (patch: Pick<PurchaseGroupMeta, "extraFees" | "discounts">) => void;
 }
 
-const adjustmentInputClass =
-  "h-6 w-[4.25rem] rounded-[4px] border-[var(--color-border)] bg-white px-1.5 text-[11px]! leading-tight shadow-none placeholder:text-[11px] md:text-[11px]!";
+const adjustmentLabelInputClass =
+  "h-7 w-[4.5rem] rounded-[4px] border-[var(--color-border)] bg-white px-1.5 text-[11px]! leading-tight shadow-none placeholder:text-[11px] md:text-[11px]!";
 
-function AdjustmentColumn({
+const adjustmentAmountInputClass =
+  "h-7 w-[4rem] rounded-[4px] border-[var(--color-border)] bg-white px-1.5 text-[11px]! leading-tight shadow-none tabular-nums placeholder:text-[11px] md:text-[11px]!";
+
+function AdjustmentRow({
   groupKey,
   title,
   items,
   fieldKey,
-  sign,
-  signClassName,
   labelPlaceholder,
   disabled,
   onItemsChange,
@@ -43,8 +44,6 @@ function AdjustmentColumn({
   title: string;
   items: PurchaseGroupAdjustment[];
   fieldKey: "extraFees" | "discounts";
-  sign: "-" | "+";
-  signClassName: string;
   labelPlaceholder: string;
   disabled?: boolean;
   onItemsChange: (
@@ -71,8 +70,8 @@ function AdjustmentColumn({
   };
 
   return (
-    <div className="min-w-0 max-w-[400px] flex-1 space-y-1">
-      <div className="flex items-center justify-between gap-1">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <div className="flex shrink-0 items-center gap-1.5">
         <span className="text-[11px] font-medium text-[var(--color-text-muted)]">
           {title}
         </span>
@@ -81,7 +80,7 @@ function AdjustmentColumn({
           variant="outline"
           size="icon-sm"
           disabled={disabled}
-          className="size-5 border-[var(--color-border)] bg-white shadow-none"
+          className="size-6 border-[var(--color-border)] bg-white shadow-none"
           aria-label={`${title} 추가`}
           onClick={addItem}
         >
@@ -89,67 +88,53 @@ function AdjustmentColumn({
         </Button>
       </div>
 
-      {items.length === 0 ? (
-        <p className="text-[10px] text-[var(--color-text-muted)]">없음</p>
-      ) : (
-        <div className="space-y-1">
-          {items.map((item) => {
-            const hasAmount = item.amount > 0;
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+        {items.map((item) => {
+          const hasAmount = item.amount > 0;
 
-            return (
-              <div key={item.id} className="flex items-center gap-1">
-                <Input
-                  id={`${fieldKey}-label-${groupKey}-${item.id}`}
-                  type="text"
-                  disabled={disabled}
-                  value={item.label}
-                  onChange={(e) => updateItem(item.id, { label: e.target.value })}
-                  placeholder={labelPlaceholder}
-                  className={adjustmentInputClass}
-                />
-                <Input
-                  id={`${fieldKey}-amount-${groupKey}-${item.id}`}
-                  type="number"
-                  min={0}
-                  disabled={disabled}
-                  value={hasAmount ? item.amount : ""}
-                  onChange={(e) =>
-                    updateItem(item.id, {
-                      amount: Math.max(0, Number(e.target.value) || 0),
-                    })
-                  }
-                  placeholder="0"
-                  className={cn(adjustmentInputClass, "tabular-nums")}
-                />
-                {hasAmount ? (
-                  <span
-                    className={cn(
-                      "w-[3.25rem] shrink-0 text-[10px] font-medium tabular-nums",
-                      signClassName,
-                    )}
-                  >
-                    {sign}
-                    {formatAmount(item.amount)}
-                  </span>
-                ) : (
-                  <span className="w-[3.25rem] shrink-0" aria-hidden />
-                )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  disabled={disabled}
-                  className="size-5 shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]"
-                  aria-label={`${title} 삭제`}
-                  onClick={() => removeItem(item.id)}
-                >
-                  <X className="size-3" />
-                </Button>
-              </div>
-            );
-          })}
-        </div>
-      )}
+          return (
+            <div
+              key={item.id}
+              className="flex shrink-0 items-center gap-0.5 rounded-md border border-[var(--color-border)]/60 bg-white pr-0.5"
+            >
+              <Input
+                id={`${fieldKey}-label-${groupKey}-${item.id}`}
+                type="text"
+                disabled={disabled}
+                value={item.label}
+                onChange={(e) => updateItem(item.id, { label: e.target.value })}
+                placeholder={labelPlaceholder}
+                className={cn(adjustmentLabelInputClass, "border-0 shadow-none")}
+              />
+              <Input
+                id={`${fieldKey}-amount-${groupKey}-${item.id}`}
+                type="number"
+                min={0}
+                disabled={disabled}
+                value={hasAmount ? item.amount : ""}
+                onChange={(e) =>
+                  updateItem(item.id, {
+                    amount: Math.max(0, Number(e.target.value) || 0),
+                  })
+                }
+                placeholder="0"
+                className={cn(adjustmentAmountInputClass, "border-0 shadow-none")}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={disabled}
+                className="size-5 shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]"
+                aria-label={`${title} 삭제`}
+                onClick={() => removeItem(item.id)}
+              >
+                <X className="size-3" />
+              </Button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -159,7 +144,7 @@ function displayAdjustmentLabel(label: string, fallback: string) {
   return trimmed || fallback;
 }
 
-function FormulaBar({
+function TotalSummaryRow({
   totalOrder,
   extraFees,
   discounts,
@@ -174,7 +159,10 @@ function FormulaBar({
   const discountTerms = discounts.filter((item) => item.amount > 0);
 
   return (
-    <div className="flex flex-1 flex-wrap items-center justify-end gap-x-1.5 gap-y-1 text-[14px] tabular-nums">
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] tabular-nums">
+      <span className="shrink-0 text-[11px] font-medium text-[var(--color-text-muted)]">
+        총합계
+      </span>
       <span className="text-[var(--color-text-muted)]">주문금액</span>
       <span className="font-medium text-[var(--color-text-primary)]">
         {formatAmount(totalOrder)}
@@ -257,34 +245,29 @@ export function ProductPurchaseGroupSummary({
   };
 
   return (
-    <div className="space-y-1.5 rounded-md border border-[var(--color-border)]/80 bg-[var(--color-bg)]/50 px-2.5 py-2">
-      <div className="flex flex-col gap-4 sm:flex-row sm:gap-10">
-        <AdjustmentColumn
-          groupKey={groupKey}
-          title="추가금"
-          items={draft.extraFees}
-          fieldKey="extraFees"
-          sign="-"
-          signClassName="text-[var(--color-expense)]"
-          labelPlaceholder="배송비"
-          disabled={disabled || saving}
-          onItemsChange={updateDraftItems}
-        />
-        <AdjustmentColumn
-          groupKey={groupKey}
-          title="할인금"
-          items={draft.discounts}
-          fieldKey="discounts"
-          sign="+"
-          signClassName="text-[var(--primary-400)]"
-          labelPlaceholder="쿠폰"
-          disabled={disabled || saving}
-          onItemsChange={updateDraftItems}
-        />
-      </div>
+    <div className="mt-1.5 space-y-2 border-t border-[var(--color-border)]/40 pt-2">
+      <AdjustmentRow
+        groupKey={groupKey}
+        title="추가금"
+        items={draft.extraFees}
+        fieldKey="extraFees"
+        labelPlaceholder="배송비"
+        disabled={disabled || saving}
+        onItemsChange={updateDraftItems}
+      />
 
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--color-border)]/80 pt-2">
-        <FormulaBar
+      <AdjustmentRow
+        groupKey={groupKey}
+        title="할인금"
+        items={draft.discounts}
+        fieldKey="discounts"
+        labelPlaceholder="쿠폰"
+        disabled={disabled || saving}
+        onItemsChange={updateDraftItems}
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-2 gap-y-1.5">
+        <TotalSummaryRow
           totalOrder={totalOrder}
           extraFees={draft.extraFees}
           discounts={draft.discounts}

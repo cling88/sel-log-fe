@@ -6,10 +6,10 @@ import { ProductPurchaseGroupSummary } from "@/components/ledger/purchase/produc
 import { ProductPurchaseLineList } from "@/components/ledger/purchase/product-purchase-line-list";
 import { PurchaseVendorLabel } from "@/components/ledger/purchase/purchase-vendor-label";
 import {
-  purchaseGroupBodyClass,
-  purchaseGroupCardClass,
-  purchaseGroupFooterClass,
-  purchaseGroupHeaderClass,
+  productPurchaseGroupBodyClass,
+  productPurchaseGroupCardClass,
+  productPurchaseGroupFooterClass,
+  productPurchaseGroupHeaderClass,
   purchaseStatusBadgePendingClass,
 } from "@/components/ledger/purchase/purchase-ui";
 import { Button } from "@/components/ui/button";
@@ -77,7 +77,7 @@ export function ProductPurchaseGroupList({
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       {groups.map((group, groupIndex) => {
         const expanded = expandedDates.has(group.paymentDate);
         const groupName =
@@ -93,7 +93,7 @@ export function ProductPurchaseGroupList({
             key={group.paymentDate}
             className={cn(
               "relative",
-              purchaseGroupCardClass(hasPendingStock && !dateCancelled),
+              productPurchaseGroupCardClass(hasPendingStock && !dateCancelled),
             )}
           >
             {dateCancelled ? (
@@ -107,11 +107,11 @@ export function ProductPurchaseGroupList({
               </div>
             ) : null}
 
-            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
+            <div className="flex items-center justify-between gap-2 py-1 pl-3 pr-2 sm:pl-4">
               <button
                 type="button"
                 onClick={() => toggle(group.paymentDate)}
-                className={cn(purchaseGroupHeaderClass, "flex-1 rounded-md -mx-1")}
+                className={cn(productPurchaseGroupHeaderClass, "flex-1 rounded-md")}
               >
                 <span
                   className={cn(
@@ -182,12 +182,12 @@ export function ProductPurchaseGroupList({
             {expanded ? (
               <div
                 className={cn(
-                  purchaseGroupBodyClass,
+                  productPurchaseGroupBodyClass,
                   dateCancelled && "pointer-events-none opacity-50",
                 )}
               >
-                <div className="flex flex-col gap-4">
-                  {group.vendorGroups.map((vendorGroup) => {
+                <div className="flex flex-col">
+                  {group.vendorGroups.map((vendorGroup, vendorIndex) => {
                     const vendorLinesTotal = vendorGroupLinesTotal(
                       vendorGroup.lines,
                     );
@@ -203,7 +203,11 @@ export function ProductPurchaseGroupList({
                     return (
                       <div
                         key={vendorGroup.vendorId}
-                        className="relative rounded-lg border border-[var(--color-border)]/90 bg-white"
+                        className={cn(
+                          "relative",
+                          vendorIndex > 0 &&
+                            "border-t border-[var(--color-border)]/40 pt-2.5 mt-2.5",
+                        )}
                       >
                         {vendorCancelled && !dateCancelled ? (
                           <div
@@ -216,15 +220,15 @@ export function ProductPurchaseGroupList({
                           </div>
                         ) : null}
 
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)]/80 px-2.5 py-2">
-                          <div className="min-w-0">
+                        <div className="flex flex-wrap items-center justify-between gap-2 py-1 mb-[6px] px-[4px]">
+                          <div className="min-w-0 flex gap-[6px] items-center">
                             <PurchaseVendorLabel
                               vendorId={vendorGroup.vendorId}
                               vendorSnapshot={vendorGroup.vendorSnapshot}
                               vendor={vendorGroup.vendorSnapshot.name}
                               className="text-sm font-semibold text-[var(--color-text-primary)]"
                             />
-                            <p className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">
+                            <p className="text-[11px] text-[var(--color-text-muted)]">
                               {vendorGroup.lines.length}건
                               {vendorPending > 0 && !vendorCancelled
                                 ? ` · 재고 미반영 ${vendorPending}`
@@ -238,7 +242,7 @@ export function ProductPurchaseGroupList({
 
                         <div
                           className={cn(
-                            "px-1 pb-2 pt-1",
+                            "pb-1",
                             vendorCancelled && "opacity-60",
                           )}
                         >
@@ -254,7 +258,7 @@ export function ProductPurchaseGroupList({
                             onLineClick={onLineClick}
                           />
 
-                          <div className="px-2">
+                          <div>
                             <ProductPurchaseGroupSummary
                               groupKey={vendorKey}
                               totalOrder={vendorLinesTotal}
@@ -277,7 +281,7 @@ export function ProductPurchaseGroupList({
                           </div>
 
                           {!dateCancelled ? (
-                            <div className="flex justify-end gap-2 px-2 pt-1">
+                            <div className="flex justify-end gap-1.5 pt-1">
                               <Button
                                 type="button"
                                 variant="outline"
@@ -319,7 +323,7 @@ export function ProductPurchaseGroupList({
 
                 <ProductPurchaseDateTotals totals={group.totals} />
 
-                <div className={purchaseGroupFooterClass}>
+                <div className={productPurchaseGroupFooterClass}>
                   {!dateCancelled ? (
                     <>
                       <Button

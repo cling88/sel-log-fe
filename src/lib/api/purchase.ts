@@ -164,6 +164,15 @@ function normalizePurchaseLineVendorFields(raw: Record<string, unknown>) {
   };
 }
 
+function normalizeNullableNumber(value: unknown): number | null {
+  if (typeof value === "number" && !Number.isNaN(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return null;
+}
+
 function normalizeProductPurchaseLine(raw: Record<string, unknown>): ProductPurchaseLine {
   const sku = raw.productSku;
   return {
@@ -175,6 +184,11 @@ function normalizeProductPurchaseLine(raw: Record<string, unknown>): ProductPurc
     productLink: normalizeOptionalString(raw.productLink),
     quantity: Number(raw.quantity) || 0,
     paymentAmount: Number(raw.paymentAmount) || 0,
+    previousPaymentAmount: normalizeNullableNumber(raw.previousPaymentAmount),
+    previousQuantity: normalizeNullableNumber(raw.previousQuantity),
+    unitPrice: normalizeNullableNumber(raw.unitPrice),
+    previousUnitPrice: normalizeNullableNumber(raw.previousUnitPrice),
+    amountAmendedAtIso: normalizeOptionalString(raw.amountAmendedAtIso) ?? null,
     memo: normalizeOptionalString(raw.memo),
     stockReflected: raw.stockReflected === true,
     ...normalizePurchaseLineBankFields(raw),

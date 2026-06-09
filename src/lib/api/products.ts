@@ -161,11 +161,14 @@ function normalizePriceHistoryItem(
       ? source
       : "manual_edit";
 
+  const previousPrice = normalizeOptionalNumber(raw.previousPrice);
+
   return {
     ...normalizeChangeTags(raw),
     id: String(raw.id ?? ""),
     atIso: String(raw.atIso ?? ""),
     price: Number(raw.price) || 0,
+    ...(previousPrice !== undefined ? { previousPrice } : { previousPrice: null }),
     source: validSource,
     reason: normalizeOptionalReason(raw.reason),
   };
@@ -260,6 +263,10 @@ export function normalizeProduct(raw: Record<string, unknown>): InventoryProduct
     stock: Number(raw.stock) || 0,
     safetyStock: Number(raw.safetyStock) || 0,
     currentPrice: Number(raw.currentPrice) || 0,
+    ...(normalizeOptionalNumber(raw.previousPrice) !== undefined
+      ? { previousPrice: normalizeOptionalNumber(raw.previousPrice) }
+      : { previousPrice: null }),
+    priceAmendedAtIso: normalizeOptionalString(raw.priceAmendedAtIso) ?? null,
     createdAtIso: String(raw.createdAtIso ?? new Date().toISOString()),
     updatedAtIso: String(raw.updatedAtIso ?? new Date().toISOString()),
     deletedAtIso: normalizeOptionalString(raw.deletedAtIso),

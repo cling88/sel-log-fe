@@ -40,6 +40,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Trash2 } from "lucide-react";
 import { fetchProducts } from "@/lib/api/products";
 import { fetchSalesChannels } from "@/lib/api/sales-channels";
 import { estimateSaleMargin, checkSaleOrderNo, toSaleOrderPayload } from "@/lib/api/sales";
@@ -645,31 +646,21 @@ function SaleRegisterDialog({
                   + 추가
                 </Button>
               </div>
-              <div className="space-y-2 rounded-lg border border-[var(--color-border)] p-2">
+              <div className="space-y-2">
                 {form.extraAdjustments.length === 0 ? (
                   <p className="px-1 py-1 text-xs text-[var(--color-text-muted)]">없음</p>
                 ) : (
                   form.extraAdjustments.map((item) => (
-                    <div key={item.id} className="grid grid-cols-12 gap-2">
-                      <div className="col-span-6 space-y-1">
-                        <p className="text-[10px] text-[var(--color-text-muted)]">
-                          항목명
-                          {(Number(item.amount) || 0) > 0 ? (
-                            <span className="text-[var(--color-danger)]"> *</span>
-                          ) : null}
-                        </p>
-                        <Input
+                    <div key={item.id} className="flex items-center gap-2">
+                      <Input
                         value={item.label}
                         onChange={(e) =>
                           updateAdjustment("extraAdjustments", item.id, { label: e.target.value })
                         }
-                        placeholder="예: 배송비"
-                        className="h-8"
+                        placeholder="항목명"
+                        className="h-8 min-w-0 flex-1"
                       />
-                      </div>
-                      <div className="col-span-4 space-y-1">
-                        <p className="text-[10px] text-[var(--color-text-muted)]">금액</p>
-                        <Input
+                      <Input
                         type="number"
                         min={0}
                         value={item.amount || ""}
@@ -678,18 +669,18 @@ function SaleRegisterDialog({
                             amount: Math.max(0, Number(e.target.value) || 0),
                           })
                         }
-                        placeholder="0"
-                        className="h-8"
+                        placeholder="금액"
+                        className="h-8 w-24 shrink-0 tabular-nums sm:w-28"
                       />
-                      </div>
                       <Button
                         type="button"
-                        variant="outline"
-                        size="sm"
-                        className="col-span-2 h-8"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-8 shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]"
                         onClick={() => removeAdjustment("extraAdjustments", item.id)}
+                        aria-label="추가금 항목 삭제"
                       >
-                        삭제
+                        <Trash2 className="size-4" />
                       </Button>
                     </div>
                   ))
@@ -708,33 +699,23 @@ function SaleRegisterDialog({
                   + 추가
                 </Button>
               </div>
-              <div className="space-y-2 rounded-lg border border-[var(--color-border)] p-2">
+              <div className="space-y-2">
                 {form.discountAdjustments.length === 0 ? (
                   <p className="px-1 py-1 text-xs text-[var(--color-text-muted)]">없음</p>
                 ) : (
                   form.discountAdjustments.map((item) => (
-                    <div key={item.id} className="grid grid-cols-12 gap-2">
-                      <div className="col-span-6 space-y-1">
-                        <p className="text-[10px] text-[var(--color-text-muted)]">
-                          항목명
-                          {(Number(item.amount) || 0) > 0 ? (
-                            <span className="text-[var(--color-danger)]"> *</span>
-                          ) : null}
-                        </p>
-                        <Input
+                    <div key={item.id} className="flex items-center gap-2">
+                      <Input
                         value={item.label}
                         onChange={(e) =>
                           updateAdjustment("discountAdjustments", item.id, {
                             label: e.target.value,
                           })
                         }
-                        placeholder="예: 쿠폰"
-                        className="h-8"
+                        placeholder="항목명"
+                        className="h-8 min-w-0 flex-1"
                       />
-                      </div>
-                      <div className="col-span-4 space-y-1">
-                        <p className="text-[10px] text-[var(--color-text-muted)]">금액</p>
-                        <Input
+                      <Input
                         type="number"
                         min={0}
                         value={item.amount || ""}
@@ -743,18 +724,18 @@ function SaleRegisterDialog({
                             amount: Math.max(0, Number(e.target.value) || 0),
                           })
                         }
-                        placeholder="0"
-                        className="h-8"
+                        placeholder="금액"
+                        className="h-8 w-24 shrink-0 tabular-nums sm:w-28"
                       />
-                      </div>
                       <Button
                         type="button"
-                        variant="outline"
-                        size="sm"
-                        className="col-span-2 h-8"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-8 shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]"
                         onClick={() => removeAdjustment("discountAdjustments", item.id)}
+                        aria-label="할인금 항목 삭제"
                       >
-                        삭제
+                        <Trash2 className="size-4" />
                       </Button>
                     </div>
                   ))

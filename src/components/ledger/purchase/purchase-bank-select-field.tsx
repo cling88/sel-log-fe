@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { BankManageDialog } from "@/components/ledger/purchase/bank-manage-dialog";
+import { LedgerPickerTrigger } from "@/components/ledger/ledger-picker-trigger";
 import { useBanks } from "@/hooks/use-banks";
 import { formatBankLabel } from "@/lib/bank-label";
 import {
@@ -85,36 +84,20 @@ export function PurchaseBankSelectField({
 
   return (
     <>
-      <div className={cn("space-y-1.5", className)}>
-        <div className="flex items-center justify-between gap-2">
-          <Label className={labelClassName}>{fieldLabel}</Label>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 shrink-0 whitespace-nowrap"
-            disabled={disabled}
-            onClick={() => setDialogOpen(true)}
-          >
-            선택
-          </Button>
-        </div>
-        <div
-          className={cn(
-            "flex min-h-9 items-center rounded-lg border border-[var(--color-border)] bg-white px-3 text-sm",
-            bankId
-              ? "text-[var(--color-text-primary)]"
-              : "text-[var(--color-text-muted)]",
-          )}
-        >
-          <span className="min-w-0 truncate">{displayLabel}</span>
-        </div>
-        {banks.length === 0 && !isLoading ? (
-          <p className="text-xs text-[var(--color-text-muted)]">
-            {fieldLabel}가 없습니다. 선택 버튼에서 추가해 주세요.
-          </p>
-        ) : null}
-      </div>
+      <LedgerPickerTrigger
+        className={cn(className)}
+        labelClassName={labelClassName}
+        label={fieldLabel}
+        displayValue={displayLabel}
+        isEmpty={!bankId}
+        disabled={disabled}
+        onOpen={() => setDialogOpen(true)}
+        emptyHint={
+          banks.length === 0 && !isLoading
+            ? `${fieldLabel}가 없습니다. 클릭하여 추가해 주세요.`
+            : undefined
+        }
+      />
 
       <BankManageDialog
         open={dialogOpen}

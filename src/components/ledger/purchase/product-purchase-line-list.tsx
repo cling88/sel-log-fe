@@ -6,6 +6,7 @@ import {
   lineRowClickHandlers,
   stopRowClickPropagation,
 } from "@/components/ledger/purchase/purchase-line-row-click";
+import { AmendedAmount } from "@/components/common/amended-amount";
 import {
   calcFinalUnitPrice,
   calcUnitPrice,
@@ -23,8 +24,8 @@ import {
   purchaseProductLineClickClass,
   purchaseProductStockPendingBgClass,
   purchaseStatusBadgeDoneClass,
+  productPurchaseTableShellClass,
   purchaseTableScrollClass,
-  purchaseTableShellClass,
 } from "@/components/ledger/purchase/purchase-ui";
 import { cn } from "@/lib/utils";
 
@@ -36,12 +37,12 @@ const cellBase = "flex items-center px-2.5 text-xs leading-snug";
 
 const headerCellClass = cn(
   cellBase,
-  "min-h-8 py-1.5 text-[11px] font-medium text-[var(--color-text-muted)] bg-[var(--primary-50)]/50",
+  "min-h-7 border-b border-[var(--color-border)]/40 py-1 text-[11px] font-medium text-[var(--color-text-muted)]",
 );
 
 const bodyCellClass = cn(
   cellBase,
-  "min-h-[58px] py-1.5 text-[var(--color-text-primary)]",
+  "min-h-[52px] py-1 text-[var(--color-text-primary)]",
 );
 
 const truncateCellClass = "min-w-0 overflow-hidden";
@@ -116,7 +117,7 @@ function StockActions({
 }
 
 const PRODUCT_IMAGE_THUMB_CLASS =
-  "relative size-[50px] shrink-0 overflow-hidden rounded-sm border border-[var(--color-border)] bg-[var(--color-bg)]";
+  "relative size-[46px] shrink-0 overflow-hidden rounded-sm bg-[var(--color-bg)] ring-1 ring-[var(--color-border)]/50";
 
 function ProductImageThumb({ imageUrl }: { imageUrl: string }) {
   if (!imageUrl) {
@@ -279,7 +280,8 @@ function DesktopRow({
   onCancelStockReflect: (lineId: string) => void;
   onLineClick: (lineId: string) => void;
 }) {
-  const unitPrice = calcUnitPrice(line.quantity, line.paymentAmount);
+  const unitPrice =
+    line.unitPrice ?? calcUnitPrice(line.quantity, line.paymentAmount);
   const finalUnit = calcFinalUnitPrice(
     line,
     pricing.totalOrder,
@@ -289,7 +291,7 @@ function DesktopRow({
 
   const pending = !line.stockReflected && !groupDisabled;
   const rowBg = purchaseProductStockPendingBgClass(pending);
-  const rowBorder = index > 0 ? "border-t border-[var(--color-border)]/80" : "";
+  const rowBorder = index > 0 ? "border-t border-[var(--color-border)]/35" : "";
 
   return (
     <div role="row" className="contents">
@@ -387,7 +389,10 @@ function DesktopRow({
           "justify-end whitespace-nowrap tabular-nums",
         )}
       >
-        {formatAmount(line.paymentAmount)}원
+        <AmendedAmount
+          current={line.paymentAmount}
+          previous={line.previousPaymentAmount}
+        />
       </div>
       <div
         {...clickableCellProps(
@@ -400,7 +405,10 @@ function DesktopRow({
           "justify-end whitespace-nowrap tabular-nums",
         )}
       >
-        {formatAmount(unitPrice)}원
+        <AmendedAmount
+          current={unitPrice}
+          previous={line.previousUnitPrice}
+        />
       </div>
       <div
         {...clickableCellProps(
@@ -493,7 +501,8 @@ function MobileCard({
   onCancelStockReflect: (lineId: string) => void;
   onLineClick: (lineId: string) => void;
 }) {
-  const unitPrice = calcUnitPrice(line.quantity, line.paymentAmount);
+  const unitPrice =
+    line.unitPrice ?? calcUnitPrice(line.quantity, line.paymentAmount);
   const finalUnit = calcFinalUnitPrice(
     line,
     pricing.totalOrder,
@@ -523,8 +532,26 @@ function MobileCard({
       value: formatPurchaseLineVendorLabel(line),
     },
     { label: "개수", value: `${line.quantity}개` },
-    { label: "결제금액", value: `${formatAmount(line.paymentAmount)}원` },
-    { label: "개당금액", value: `${formatAmount(unitPrice)}원` },
+    {
+      label: "결제금액",
+      value: (
+        <AmendedAmount
+          current={line.paymentAmount}
+          previous={line.previousPaymentAmount}
+          className="justify-start"
+        />
+      ),
+    },
+    {
+      label: "개당금액",
+      value: (
+        <AmendedAmount
+          current={unitPrice}
+          previous={line.previousUnitPrice}
+          className="justify-start"
+        />
+      ),
+    },
     { label: "최종개당", value: `${formatAmount(finalUnit)}원` },
     {
       label: "추천판매가",
@@ -539,7 +566,7 @@ function MobileCard({
   return (
     <article
       className={cn(
-        "rounded-xl border border-[var(--color-border)] px-3.5 py-2.5 shadow-[var(--shadow-sm)]",
+        "border-b border-[var(--color-border)]/40 px-3 py-2 last:border-b-0 sm:px-4",
         purchaseProductStockPendingBgClass(stockPending),
         purchaseProductLineClickClass(groupDisabled, stockPending),
       )}
@@ -558,7 +585,7 @@ function MobileCard({
           </div>
         ))}
         <div
-          className="grid grid-cols-[5.5rem_1fr] items-center gap-2 border-t border-[var(--color-border)] pt-2"
+          className="grid grid-cols-[5.5rem_1fr] items-center gap-2 border-t border-[var(--color-border)]/40 pt-1.5"
           onClick={stopRowClickPropagation}
           onKeyDown={stopRowClickPropagation}
         >
@@ -594,8 +621,8 @@ export function ProductPurchaseLineList({
 
   return (
     <>
-      <div className={cn("hidden md:block", purchaseTableScrollClass)}>
-        <div className={purchaseTableShellClass}>
+      <div className={cn(" border border-[#c9c8c8] rounded-[8px] hidden md:block", purchaseTableScrollClass)}>
+        <div className={productPurchaseTableShellClass}>
           <div className={PRODUCT_TABLE_GRID_CLASS} role="table">
             <DesktopHeader />
             {lines.map((line, index) => (
@@ -615,7 +642,7 @@ export function ProductPurchaseLineList({
         </div>
       </div>
 
-      <ul className="flex flex-col gap-2 md:hidden">
+      <ul className="flex flex-col md:hidden">
         {lines.map((line, index) => (
           <li key={line.id}>
             <MobileCard

@@ -38,6 +38,7 @@ import {
 import { PurchaseListPagination } from "@/components/ledger/purchase/purchase-list-pagination";
 import { PurchaseListToolbar } from "@/components/ledger/purchase/purchase-list-toolbar";
 import { cn } from "@/lib/utils";
+import { AmendedAmount } from "@/components/common/amended-amount";
 import { formatAmount } from "@/lib/purchase-product-calc";
 import { formatProductChangeTag } from "@/lib/product-change-labels";
 import { CategoryManageDialog } from "@/components/ledger/products/category-manage-dialog";
@@ -691,9 +692,12 @@ export function ProductsTabPanel() {
                                 {p.stock}
                               </span>
                               {" · 판매가 "}
-                              <span className="tabular-nums font-medium text-[var(--color-text-primary)]">
-                                {formatAmount(p.currentPrice ?? 0)}원
-                              </span>
+                              <AmendedAmount
+                                current={p.currentPrice ?? 0}
+                                previous={p.previousPrice}
+                                className="inline-flex"
+                                currentClassName="font-medium text-[var(--color-text-primary)]"
+                              />
                             </p>
                           </div>
                         </div>
@@ -854,9 +858,12 @@ export function ProductsTabPanel() {
                 </div>
                 <div className="rounded-xl border border-[var(--color-border)] bg-white p-3">
                   <p className="text-xs text-[var(--color-text-secondary)]">판매가</p>
-                  <p className="mt-1 text-lg font-semibold tabular-nums">
-                    {formatAmount(selectedProduct.currentPrice ?? 0)}원
-                  </p>
+                  <AmendedAmount
+                    current={selectedProduct.currentPrice ?? 0}
+                    previous={selectedProduct.previousPrice}
+                    className="mt-1 text-lg"
+                    currentClassName="font-semibold"
+                  />
                 </div>
               </div>
 
@@ -985,9 +992,12 @@ export function ProductsTabPanel() {
                               <span className="font-medium">
                                 {priceHistorySourceLabel(entry.data.source)}
                               </span>
-                              <span className="tabular-nums font-semibold">
-                                {formatAmount(entry.data.price)}원
-                              </span>
+                              <AmendedAmount
+                                current={entry.data.price}
+                                previous={entry.data.previousPrice}
+                                className="inline-flex justify-start"
+                                currentClassName="font-semibold"
+                              />
                               {entry.data.reason ? (
                                 <span className="truncate text-[var(--color-text-secondary)]">
                                   {entry.data.reason}
