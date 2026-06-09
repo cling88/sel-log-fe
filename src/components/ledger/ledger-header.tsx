@@ -1,12 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { LedgerYearPicker } from "@/components/ledger/ledger-year-picker";
 import { useLedgerSummary } from "@/hooks/use-ledger-summary";
 import { getLedgerErrorMessage } from "@/lib/api/ledger";
 import { isMonthScopedLedgerTab } from "@/lib/ledger-period";
 import { formatAmount } from "@/lib/purchase-product-calc";
+import {
+  applyLedgerTabParams,
+  buildLedgerHref,
+  isLedgerPath,
+} from "@/lib/ledger-url";
 import { cn } from "@/lib/utils";
 import type { LedgerTabId, PeriodPreset } from "@/types/common";
 import { ChevronDown, ChevronUp } from "lucide-react";
@@ -47,7 +53,6 @@ function formatNetTotal(value: number | undefined, loading: boolean) {
 }
 
 export function LedgerHeader() {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -72,20 +77,7 @@ export function LedgerHeader() {
   const netTotal = summary?.netTotal ?? 0;
   const summaryPending = summaryLoading && !summary;
 
-  const setTab = (tab: LedgerTabId) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", tab);
-    if (tab === "purchase") {
-      if (!params.get("purchaseSub")) {
-        params.set("purchaseSub", "product");
-      }
-    } else {
-      params.delete("purchaseSub");
-    }
-    router.replace(`/ledger?${params.toString()}`);
-  };
-
-  if (pathname !== "/ledger") return null;
+  if (!isLedgerPath(pathname)) return null;
 
   return (
     <div className="flex flex-col">
@@ -200,11 +192,16 @@ export function LedgerHeader() {
       <nav className="flex gap-4 bg-[var(--primary-900)] px-4 pb-0 pt-2 sm:px-6">
         {ledgerTabs.map((tab) => {
           const active = tab.id === activeTab;
+          const href = buildLedgerHref(pathname, searchParams, (params) => {
+            applyLedgerTabParams(params, tab.id);
+          });
           return (
-            <button
+            <Link
               key={tab.id}
-              type="button"
-              onClick={() => setTab(tab.id)}
+              href={href}
+              replace
+              scroll={false}
+              aria-current={active ? "page" : undefined}
               className={cn(
                 "border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors",
                 active
@@ -213,7 +210,7 @@ export function LedgerHeader() {
               )}
             >
               {tab.label}
-            </button>
+            </Link>
           );
         })}
       </nav>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { replaceLedgerQuery } from "@/lib/ledger-url";
 import { cn } from "@/lib/utils";
 import type { PurchaseSubTabId } from "@/types/common";
 
@@ -36,6 +37,7 @@ export function isPurchaseSubTab(value: string | null): value is PurchaseSubTabI
 
 export function PurchaseSubTabs() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const subParam = searchParams.get("purchaseSub");
   const activeSub: PurchaseSubTabId = isPurchaseSubTab(subParam)
@@ -43,10 +45,10 @@ export function PurchaseSubTabs() {
     : "product";
 
   const setSub = (sub: PurchaseSubTabId) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", "purchase");
-    params.set("purchaseSub", sub);
-    router.replace(`/ledger?${params.toString()}`);
+    replaceLedgerQuery(router, pathname, searchParams, (params) => {
+      params.set("tab", "purchase");
+      params.set("purchaseSub", sub);
+    });
   };
 
   return (

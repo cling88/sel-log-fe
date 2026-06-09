@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { replaceLedgerQuery } from "@/lib/ledger-url";
 import { MODAL_DIALOG_FOOTER_CLASS } from "@/components/common/modal-footer-classes";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,27 +27,27 @@ interface LedgerGlobalSearchDialogProps {
 
 function navigateToSearchResult(
   router: ReturnType<typeof useRouter>,
+  pathname: string,
   searchParams: URLSearchParams,
   result: LedgerGlobalSearchResult,
   query: string,
 ) {
-  const params = new URLSearchParams(searchParams.toString());
-  params.set("tab", result.tab);
-  params.set("q", query.trim());
+  replaceLedgerQuery(router, pathname, searchParams, (params) => {
+    params.set("tab", result.tab);
+    params.set("q", query.trim());
 
-  if (result.purchaseSub) params.set("purchaseSub", result.purchaseSub);
-  else params.delete("purchaseSub");
+    if (result.purchaseSub) params.set("purchaseSub", result.purchaseSub);
+    else params.delete("purchaseSub");
 
-  if (result.month) {
-    const [yearStr, monthStr] = result.month.split("-");
-    const year = Number(yearStr);
-    const month = Number(monthStr);
-    if (year && month) {
-      params.set("month", toYearMonthParam(year, month));
+    if (result.month) {
+      const [yearStr, monthStr] = result.month.split("-");
+      const year = Number(yearStr);
+      const month = Number(monthStr);
+      if (year && month) {
+        params.set("month", toYearMonthParam(year, month));
+      }
     }
-  }
-
-  router.replace(`/ledger?${params.toString()}`);
+  });
 }
 
 export function LedgerGlobalSearchDialog({
@@ -54,6 +55,7 @@ export function LedgerGlobalSearchDialog({
   onOpenChange,
 }: LedgerGlobalSearchDialogProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
 
@@ -61,7 +63,7 @@ export function LedgerGlobalSearchDialog({
   const trimmed = query.trim();
 
   const handleSelect = (result: LedgerGlobalSearchResult) => {
-    navigateToSearchResult(router, searchParams, result, trimmed);
+    navigateToSearchResult(router, pathname, searchParams, result, trimmed);
     onOpenChange(false);
   };
 

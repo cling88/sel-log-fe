@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { replaceLedgerQuery } from "@/lib/ledger-url";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -319,6 +320,7 @@ function StockAdjustDialog({
 
 export function ProductsTabPanel() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const stockStatusParam = searchParams.get("stockStatus");
   const stockStatus = useMemo((): ProductStockStatus | null => {
@@ -370,10 +372,10 @@ export function ProductsTabPanel() {
   const [listPage, setListPage] = useState(1);
 
   const setStockStatusFilter = (next: ProductStockStatus | null) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (next) params.set("stockStatus", next);
-    else params.delete("stockStatus");
-    router.replace(`/ledger?${params.toString()}`);
+    replaceLedgerQuery(router, pathname, searchParams, (params) => {
+      if (next) params.set("stockStatus", next);
+      else params.delete("stockStatus");
+    });
     setListPage(1);
   };
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { replaceLedgerQuery } from "@/lib/ledger-url";
 
 type UseLedgerUrlSearchOptions = {
   /**
@@ -15,6 +16,7 @@ type UseLedgerUrlSearchOptions = {
 export function useLedgerUrlSearch(options?: UseLedgerUrlSearchOptions) {
   const commit = options?.commit ?? "instant";
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const committedSearch = searchParams.get("q") ?? "";
   const [draft, setDraft] = useState(committedSearch);
@@ -25,13 +27,13 @@ export function useLedgerUrlSearch(options?: UseLedgerUrlSearchOptions) {
 
   const pushQueryToUrl = useCallback(
     (value: string) => {
-      const params = new URLSearchParams(searchParams.toString());
       const trimmed = value.trim();
-      if (trimmed) params.set("q", trimmed);
-      else params.delete("q");
-      router.replace(`/ledger?${params.toString()}`);
+      replaceLedgerQuery(router, pathname, searchParams, (params) => {
+        if (trimmed) params.set("q", trimmed);
+        else params.delete("q");
+      });
     },
-    [router, searchParams],
+    [pathname, router, searchParams],
   );
 
   const setSearch = useCallback(

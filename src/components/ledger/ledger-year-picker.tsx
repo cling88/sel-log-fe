@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { replaceLedgerQuery } from "@/lib/ledger-url";
 import { LedgerYearSelectDialog } from "@/components/ledger/ledger-year-select-dialog";
 import {
   ledgerEarliestMonthQueryKey,
@@ -40,6 +41,7 @@ function readActiveTab(searchParams: URLSearchParams): LedgerTabId {
 
 export function LedgerYearPicker({ interactive = true }: LedgerYearPickerProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const monthParam = searchParams.get("month");
@@ -59,8 +61,8 @@ export function LedgerYearPicker({ interactive = true }: LedgerYearPickerProps) 
     const clampedYear = Math.min(Math.max(nextYear, minYear), maxYear);
     setYear(clampedYear);
 
-    const params = new URLSearchParams(searchParams.toString());
     const apiTab = toEarliestMonthTab(activeTab);
+    let nextMonthParam = "";
 
     if (isMonthScopedLedgerTab(activeTab) && apiTab) {
       const data = await queryClient.fetchQuery({
@@ -74,16 +76,18 @@ export function LedgerYearPicker({ interactive = true }: LedgerYearPickerProps) 
           : clampedYear === currentYear
             ? currentMonth
             : 1;
-      params.set("month", toYearMonthParam(clampedYear, nextMonth));
+      nextMonthParam = toYearMonthParam(clampedYear, nextMonth);
     } else {
       let nextMonth = parsed?.month ?? currentMonth;
       if (clampedYear === currentYear && nextMonth > currentMonth) {
         nextMonth = currentMonth;
       }
-      params.set("month", toYearMonthParam(clampedYear, nextMonth));
+      nextMonthParam = toYearMonthParam(clampedYear, nextMonth);
     }
 
-    router.replace(`/ledger?${params.toString()}`);
+    replaceLedgerQuery(router, pathname, searchParams, (params) => {
+      params.set("month", nextMonthParam);
+    });
   };
 
   useEffect(() => {

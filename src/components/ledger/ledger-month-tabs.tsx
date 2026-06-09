@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LedgerMonthAddDialog } from "@/components/ledger/ledger-month-add-dialog";
 import { useLedgerEarliestMonth } from "@/hooks/use-ledger-earliest-month";
 import {
@@ -12,6 +12,7 @@ import {
   toEarliestMonthTab,
   toYearMonthParam,
 } from "@/lib/ledger-period";
+import { replaceLedgerQuery } from "@/lib/ledger-url";
 import type { LedgerTabId } from "@/types/common";
 import { cn } from "@/lib/utils";
 import { Plus } from "lucide-react";
@@ -22,7 +23,10 @@ interface LedgerMonthTabsProps {
 
 export function LedgerMonthTabs({ tabId }: LedgerMonthTabsProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
   const monthParam = searchParams.get("month");
   const selected = parseYearMonth(monthParam) ?? getTodayYearMonth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -59,11 +63,11 @@ export function LedgerMonthTabs({ tabId }: LedgerMonthTabsProps) {
 
   useEffect(() => {
     if (monthParam) return;
-    const params = new URLSearchParams(searchParams.toString());
     const { year, month } = getTodayYearMonth();
-    params.set("month", toYearMonthParam(year, month));
-    router.replace(`/ledger?${params.toString()}`);
-  }, [monthParam, router, searchParams]);
+    replaceLedgerQuery(router, pathname, searchParamsRef.current, (params) => {
+      params.set("month", toYearMonthParam(year, month));
+    });
+  }, [monthParam, pathname, router]);
 
   useEffect(() => {
     if (isLoading || !earliestData) return;
@@ -74,9 +78,9 @@ export function LedgerMonthTabs({ tabId }: LedgerMonthTabsProps) {
     );
     const nextValue = toYearMonthParam(resolved.year, resolved.month);
     if (nextValue === selectedValue) return;
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("month", nextValue);
-    router.replace(`/ledger?${params.toString()}`);
+    replaceLedgerQuery(router, pathname, searchParamsRef.current, (params) => {
+      params.set("month", nextValue);
+    });
   }, [
     tabId,
     selected.year,
@@ -85,8 +89,8 @@ export function LedgerMonthTabs({ tabId }: LedgerMonthTabsProps) {
     monthTabs,
     earliestData,
     isLoading,
+    pathname,
     router,
-    searchParams,
   ]);
 
   useEffect(() => {
@@ -98,9 +102,9 @@ export function LedgerMonthTabs({ tabId }: LedgerMonthTabsProps) {
   }, [selectedValue, monthTabs.length]);
 
   const setMonth = (value: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("month", value);
-    router.replace(`/ledger?${params.toString()}`);
+    replaceLedgerQuery(router, pathname, searchParams, (params) => {
+      params.set("month", value);
+    });
   };
 
   const handleAddMonth = (value: string) => {
