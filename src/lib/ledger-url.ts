@@ -11,6 +11,8 @@ export function applyLedgerTabParams(
   tab: LedgerTabId,
 ): URLSearchParams {
   params.set("tab", tab);
+  // 전역 검색 딥링크 등으로 붙은 q는 다른 탭으로 이동 시 초기화
+  params.delete("q");
   if (tab === "purchase") {
     if (!params.get("purchaseSub")) {
       params.set("purchaseSub", "product");

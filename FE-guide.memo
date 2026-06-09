@@ -6,31 +6,65 @@
 
 ```jsonc
 { "data": <payload>, "meta": { ... } }
-{ "error": { "code": "NOT_FOUND", "message": "..." } }
+{ "error": { "code": "...", "message": "..." } }
 ```
 
-`user_id`는 BE가 JWT로 처리 — FE 전송 불필요.
+`user_id`는 BE가 JWT `sub`로 처리 — FE 전송 불필요.
 
-**배포 전**: `npm run db:migrate` (최신: `20260605500000_price_amendment.sql`)
-
----
-
-## 연동 우선순위
-
-| 순위 | 화면 | API |
-|------|------|-----|
-| P0 | `/dashboard` | `GET /dashboard/overview` |
-| P0 | `/settings` | `GET/PATCH /settings` |
-| P0 | 매출 채널 관리 | `sales-channels` 필드 확장 |
-| P0 | 매출 | `marginEstimate`, `check-order-no` |
-| P1 | 대시보드·장부 | `ledger/monthly-review`, `reconciliation/sale-income` |
-| P1 | 상품·상품매입 | **§15 이전 금액 표시** (`previousPrice` 등) |
-| P2 | 상품관리 | `products?stockStatus=` |
-| P2 | 신고 전 검증 | `ledger/monthly-totals` |
+**배포 전**: `npm run db:migrate` (최신 `20260605500000_price_amendment.sql` 포함)
 
 ---
 
-## 1. 대시보드 — `GET /dashboard/overview`
+## 1. 전역 검색 — `GET /ledger/search` (§2, 신규 연동)
+
+> **현재 FE**: `ledger-global-search.ts` + 퍼블 시드 → **API로 교체**  
+> **진입**: 장부 헤더 검색 아이콘 → `ledger-global-search-dialog.tsx`
+
+```
+GET /api/v1/ledger/search?q=플레이브&page=1&limit=30
+```
+
+| 파라미터 | 필수 | 기본 |
+|----------|------|------|
+| `q` | ✓ | trim 후 빈 값 → `400 VALIDATION_ERROR` |
+| `page` | — | 1 |
+| `limit` | — | 30 |
+
+### 응답 항목
+
+```ts
+type LedgerGlobalSearchResult = {
+  id: string;           // "purchase-product-pp-001" | "sale-so-002" | "products-prd-010"
+  tab: 'purchase' | 'sale' | 'income' | 'products';
+  purchaseSub?: 'product' | 'supply' | 'other';  // tab=purchase 일 때
+  entityId: string;     // 원본 PK (P2 행 포커스용)
+  month?: string | null;  // YYYY-MM. products는 null
+  title: string;
+  subtitle?: string;
+  date?: string | null;   // ISO date. products는 생략
+};
+```
+
+`tabLabel` / `subLabel`은 **FE 상수**로 부여 (BE 미제공).
+
+### 결과 클릭 시 URL (기존과 동일)
+
+```
+/ledger?tab=purchase&purchaseSub=product&month=2026-06&q=플레이브
+/ledger?tab=sale&month=2026-05&q=SO-260501
+/ledger?tab=products&q=SKU-001
+```
+
+### FE 연동 단계
+
+1. `src/lib/api/ledger-search.ts` — `fetchLedgerSearch(q, page?, limit?)`
+2. `ledger-global-search-dialog.tsx` — `useQuery` + debounce 300ms
+3. 응답 → `LedgerGlobalSearchResult` 매핑
+4. `*-pub-seed.ts` 전역 검색 참조 제거
+
+---
+
+## 2. 대시보드 — `GET /dashboard/overview`
 
 ```
 GET /api/v1/dashboard/overview?month=2026-06
@@ -38,15 +72,15 @@ GET /api/v1/dashboard/overview?month=2026-06
 
 | 필드 | UI |
 |------|-----|
-| `purchase.*` / `sale.*` / `income.*` | 카드 + `changePercent` (null이면 "—") |
+| `purchase/sale/income.*` + `changePercent` | 카드 (null → "—") |
 | `sale.estimatedNetProfitTotal` | 추정 순익 합 |
-| `alerts.*` | 경고 배지 → 장부·상품 딥링크 |
+| `alerts.*` | 경고 → 장부·상품 딥링크 |
 | `today.*` | 오늘 요약 |
-| `cumulative.netTotal` | 순손익 (`ledger/summary` 동일 규칙) |
+| `cumulative.netTotal` | 순손익 |
 
 ---
 
-## 2. 설정 — `GET /settings`, `PATCH /settings`
+## 3. 설정 — `GET/PATCH /settings`
 
 ```jsonc
 {
@@ -58,69 +92,58 @@ GET /api/v1/dashboard/overview?month=2026-06
 }
 ```
 
-| 설정 | FE 반영 |
-|------|---------|
-| `defaultChannelId` | 매출 등록 모달 기본 채널 |
-| `marginMinRate` / `marginMaxRate` | 매입 추천 판매가 범위 |
+| 설정 | FE |
+|------|-----|
+| `defaultChannelId` | 매출 등록 기본 채널 |
+| `marginMinRate` / `marginMaxRate` | 매입 추천 판매가 |
 | `vatExtractRate` | BE `marginEstimate` 자동 반영 |
 
 ---
 
-## 3. 판매채널 확장
+## 4. 판매채널 확장
 
 ```ts
 type SalesChannel = {
   id: string;
   name: string;
-  platformFeeRate: number;  // UI: % 입력 → /100 저장
+  platformFeeRate: number;  // UI % → /100
   storeName: string | null;
   storeUrl: string | null;
 };
 ```
 
-매출 응답 `channel` 스냅샷에 동일 필드 포함.
+매출 `channel` 스냅샷에 동일 필드.
 
 ---
 
-## 4. 매출 추정 순익 (`marginEstimate`)
+## 5. 매출
 
-주문 합계 아래:
+### `marginEstimate` (목록·등록·수정)
 
 ```
 추정 순수익 +1,966원          ← estimatedGrossProfit (초록)
-추정 실수익 +1,200원 (부가세·수수료 반영)  ← estimatedNetProfit
+추정 실수익 +1,200원          ← estimatedNetProfit
 ※ 추정 금액입니다
 ```
 
 | API | 용도 |
 |-----|------|
-| `GET/POST/PATCH /sales` | `marginEstimate` 포함 |
 | `POST /sales/estimate-margin` | 등록 모달 미리보기 |
-| `GET /sales/check-order-no` | 주문번호 중복 (디바운스) |
+| `GET /sales/check-order-no` | 주문번호 중복 |
 
-취소 주문: `marginEstimate: null`  
-중복 등록: `409 DUPLICATE_ORDER_NO`
-
----
-
-## 5. 수익 대사 필드
-
-```jsonc
-{ "orderNo": "NV-...", "linkedSaleOrderId": "so-001" }
-```
-
-`GET /reconciliation/sale-income?month=2026-06` — 미연결 매출·입금 목록.
+취소: `marginEstimate: null` / 중복: `409 DUPLICATE_ORDER_NO`
 
 ---
 
-## 6. 월말 점검·합계
+## 6. 수익·대사
+
+입금 body/응답: `orderNo`, `linkedSaleOrderId` (선택)
 
 ```
+GET /api/v1/reconciliation/sale-income?month=2026-06
 GET /api/v1/ledger/monthly-review?month=2026-06
 GET /api/v1/ledger/monthly-totals?month=2026-06
 ```
-
-`checks[]` → 체크리스트 UI. `detailUrl` 있으면 `router.push`.
 
 ---
 
@@ -134,154 +157,89 @@ meta: `outOfStockCount`, `lowStockCount`
 
 ---
 
-## 8. 엑셀·구매처·전역검색
+## 8. 가격 수정 이전값 (§15)
 
-| API | 비고 |
-|-----|------|
-| `GET /export/*` | 바이너리 `.xlsx`, `blob()` 다운로드 |
-| `/vendors`, `vendorGroups` | 상품매입 2단 그룹 |
-| `GET /ledger/search` | 전역 검색 (BE 구현됨) |
-
----
-
-## 9. [P1] 가격 수정 이전값 표시 (§15)
-
-> 상품관리·상품매입에서 금액 수정 시 `~~이전~~` → `신규` (line-through) 표시.
-
-### 공통 FE 규칙
+### 표시 규칙
 
 ```ts
-function showAmended(previous: number | null | undefined, current: number): boolean {
-  return previous != null && previous !== current;
-}
+const show = previous != null && previous !== current;
+// → <s>{format(previous)}</s> {format(current)}
 ```
 
-- `previous*`가 `null`이거나 현재값과 같으면 **취소선 없음**
-- 직전 **1회**만 유지 (다회 이력은 `price-history` API)
-
-### 9-1. 상품관리 (`GET/PATCH /products`)
-
-응답 필드:
+### 상품 (`GET/PATCH /products`)
 
 | 필드 | 설명 |
 |------|------|
 | `currentPrice` | 현재 판매가 |
-| `previousPrice` | 직전 판매가 (`null` 가능) |
-| `priceAmendedAtIso` | 마지막 가격 변경 시각 (툴팁용, 선택) |
+| `previousPrice` | 직전 판매가 |
+| `priceAmendedAtIso` | 마지막 변경 시각 (선택) |
 
-```ts
-type Product = {
-  currentPrice: number;
-  previousPrice?: number | null;
-  priceAmendedAtIso?: string | null;
-  changeKind?: 'price' | 'stock';   // PATCH 직후만
-  changeFrom?: 'edit' | 'stock_adjust';
-};
-```
+`PATCH` 직후: `changeKind: 'price'`, `changeFrom: 'edit'`
 
-**표시 예**
+### 가격 이력 (`GET /products/:id/price-history`)
 
-```text
-판매가  ~~25,000원~~ 28,000원
-```
+항목에 `previousPrice` (등록 최초 건은 `null`).
 
-`PATCH` 직후 `changeKind: 'price'`, `changeFrom: 'edit'` → 「금액조정 · 편집수정」 뱃지 (기존 규칙).
-
-### 9-2. 가격 이력 (`GET /products/:id/price-history`)
-
-항목에 `previousPrice` 추가:
-
-```jsonc
-{
-  "price": 28000,
-  "previousPrice": 25000,
-  "source": "manual_edit"
-}
-```
-
-`product_register` 최초 건은 `previousPrice: null`.
-
-### 9-3. 상품매입 라인 (`GET /purchase/products`, `PATCH` 응답)
-
-각 `lines[]` / `vendorGroups[].lines[]`:
+### 상품매입 라인
 
 | 필드 | 설명 |
 |------|------|
-| `paymentAmount` | 결제금액 |
-| `previousPaymentAmount` | 직전 결제금액 |
-| `quantity` | 수량 |
-| `previousQuantity` | 직전 수량 |
-| `unitPrice` | `floor(paymentAmount / quantity)` — **BE 계산값** |
-| `previousUnitPrice` | `floor(previousPaymentAmount / previousQuantity)` 또는 `null` |
-| `amountAmendedAtIso` | 마지막 금액·수량 변경 시각 |
+| `paymentAmount` / `previousPaymentAmount` | 결제금액 |
+| `quantity` / `previousQuantity` | 수량 |
+| `unitPrice` / `previousUnitPrice` | BE `floor` 계산 |
+| `amountAmendedAtIso` | 변경 시각 |
 
-**표시 예 (상품매입 목록)**
+`stockReflected: true` 라인은 수정 불가.
 
-| 컬럼 | 표시 |
-|------|------|
-| 결제금액 | `~~150,000원~~` `140,000원` |
-| 개당금액 | `~~15,000원~~` `14,000원` |
-
-> 구매처 그룹 배분(최종개당)은 기존 FE 로직 유지. **라인 단위** `unitPrice` / `previousUnitPrice`만 취소선 적용.
-
-**제약**: `stockReflected: true` 라인은 수정 불가 — `previous*`는 미반영 구간에서만 의미 있음.
-
-### 9-4. TypeScript 타입
+### TypeScript
 
 ```ts
 type Product = {
-  // ...
   currentPrice: number;
   previousPrice?: number | null;
   priceAmendedAtIso?: string | null;
-};
-
-type PriceHistoryItem = {
-  price: number;
-  previousPrice?: number | null;
-  source: 'product_register' | 'manual_edit' | 'purchase';
 };
 
 type PurchaseProductLine = {
   paymentAmount: number;
   previousPaymentAmount?: number | null;
-  quantity: number;
-  previousQuantity?: number | null;
   unitPrice: number | null;
   previousUnitPrice: number | null;
-  amountAmendedAtIso?: string | null;
+  // ...
 };
 ```
 
-### 9-5. 공통 UI 컴포넌트 권장
-
-```tsx
-// AmendedAmount.tsx
-// previous != null && previous !== current → <s>{format(previous)}</s> {format(current)}
-```
-
-파서(`normalizeProduct`, `normalizeProductPurchaseLine`)에 `previous*` 필드 매핑 추가.
-
-### 9-5. 체크리스트
-
-- [ ] 상품 목록·상세 — `previousPrice` 취소선
-- [ ] 상품매입 라인 테이블 — 결제금액·개당금액 취소선
-- [ ] 가격 이력 탭 — `previousPrice` 취소선
-- [ ] 타입·파서 반영
+공통 `AmendedAmount` 컴포넌트 권장.
 
 ---
 
-## 10. 에러 코드 (추가분)
+## 9. 엑셀·구매처
+
+| API | 비고 |
+|-----|------|
+| `GET /export/*` | 바이너리 `.xlsx`, `blob()` |
+| `/vendors` | 구매처 CRUD |
+| `vendorGroups[]` | 상품매입 2단 그룹 |
+
+---
+
+## 10. 에러 코드
 
 | code | 처리 |
 |------|------|
-| `DUPLICATE_ORDER_NO` | 매출 주문번호 인라인 에러 |
-| `INVALID_SETTINGS` | 설정 폼 검증 |
-| `SALES_CHANNEL_NAME_EXISTS` | 채널명 중복 |
+| `DUPLICATE_ORDER_NO` | 매출 주문번호 |
+| `VALIDATION_ERROR` | 검색 `q` 빈 값 등 |
+| `INVALID_SETTINGS` | 설정 검증 |
 
 ---
 
-## 11. 화면별 API 체크리스트
+## 11. 화면별 체크리스트
+
+### 전역 검색 (우선)
+- [ ] `fetchLedgerSearch` API 클라이언트
+- [ ] 모달 debounce + `useQuery`
+- [ ] 결과 클릭 → `tab` / `purchaseSub` / `month` / `q` URL
+- [ ] 시드 검색 제거
 
 ### `/dashboard`
 - [ ] `GET /dashboard/overview`
@@ -289,23 +247,21 @@ type PurchaseProductLine = {
 
 ### `/settings`
 - [ ] `GET/PATCH /settings`
-- [ ] `GET /sales-channels` (기본 채널 셀렉트)
 
 ### 매출
-- [ ] 채널 `platformFeeRate` / `storeName` / `storeUrl`
-- [ ] `marginEstimate` 2줄 표시
-- [ ] `check-order-no` + `estimate-margin`
+- [ ] 채널 확장 필드
+- [ ] `marginEstimate` / `check-order-no`
 
 ### 상품·상품매입 (§15)
-- [ ] `previousPrice` / `previousPaymentAmount` UI
+- [ ] `previousPrice` / `previousPaymentAmount` 취소선 UI
 - [ ] `price-history` `previousPrice`
 
 ### 수익
-- [ ] `orderNo`, `linkedSaleOrderId` (선택)
+- [ ] `orderNo`, `linkedSaleOrderId`
 
 ### 상품관리
-- [ ] `stockStatus` 필터 + meta 배지
+- [ ] `stockStatus` 필터
 
 ---
 
-*FE-guide v1.1 — §14·§15 반영 (2026-06-09)*
+*FE-guide v1.2 — §2 전역검색 + §14·§15 반영 (2026-06-09)*

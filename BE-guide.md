@@ -128,39 +128,215 @@
 
 ## 2. 전역 검색
 
-> 화면: 장부 헤더 검색 아이콘 → 모달  
-> **FE 연동 상태**: 미연동 (시드 + localStorage 상품). 아래 스펙은 2차 목표.
+> **화면**: 장부 헤더(연도·월 선택 영역) 우측 검색 아이콘 → `장부 전체 검색` 모달  
+> **FE 연동 상태**: **미연동** — `src/lib/ledger-global-search.ts`가 퍼블 시드(`*-pub-seed.ts`) + localStorage 상품만 검색.  
+> **목표**: 아래 API 구현 후 FE가 시드 검색을 제거하고 본 API로 교체.
 
-### `GET /ledger/search`
+### 2-1. FE 현행 동작 (BE 구현 시 맞출 기준)
 
-| 파라미터 | 필수 | 설명 |
-|----------|------|------|
-| `q` | ✓ | 검색어 |
-| `page` | — | 기본 1 |
-| `limit` | — | 기본 30 |
+| 항목 | FE 구현 |
+|------|---------|
+| 진입점 | `LedgerGlobalSearchTrigger` (`ledger-year-picker.tsx`) |
+| UI | `ledger-global-search-dialog.tsx` — 입력 즉시 검색, 스크롤 목록 |
+| 검색 호출 | 클라이언트 `searchLedgerGlobally(query)` (동기, API 없음) |
+| 빈 검색어 | `[]` 반환 (API 호출 안 함) |
+| 결과 선택 시 URL | `tab`, `purchaseSub`(매입만), `month`(YYYY-MM), `q`(검색어) 설정 후 해당 탭 이동 |
+| 탭 내 검색 | 이동 후 각 탭 `useLedgerUrlSearch` → `committedSearch`로 **기존 목록 API** `q` 재사용 |
 
-**응답**
+**FE 구현 파일**
+
+- `src/components/ledger/ledger-global-search-dialog.tsx`
+- `src/lib/ledger-global-search.ts`
+- `src/types/ledger-global-search.ts`
+- `src/hooks/use-ledger-url-search.ts`
+
+**제거 예정 (API 연동 후)**
+
+- `src/lib/income-pub-seed.ts`
+- `src/lib/sale-pub-seed.ts`
+- `src/lib/purchase-pub-seed.ts` (전역 검색용 시드 부분)
+
+---
+
+### 2-2. API — `GET /ledger/search`
+
+장부 4개 탭(매입 3종·매출·수익·상품관리)을 **한 번에** 검색해 모달용 **요약 카드** 목록을 반환한다.  
+상세 필드·금액·페이징 목록은 기존 탭별 API를 그대로 사용한다.
+
+| 파라미터 | 필수 | 기본값 | 설명 |
+|----------|------|--------|------|
+| `q` | ✓ | — | 검색어. trim 후 빈 문자열이면 `400` 또는 `data: []` |
+| `page` | — | `1` | 1-based |
+| `limit` | — | `30` | 모달 1페이지 권장 30~50 |
+
+**인증**: 로그인 사용자 본인 데이터만 (다른 탭 목록 API와 동일 스코프).
+
+---
+
+### 2-3. 검색 대상 (FE `ledger-global-search.ts`와 1:1)
+
+각 행은 **매칭된 엔티티 1건 = 결과 1건**. 부분 일치·대소문자 무시(`ILIKE` / `LOWER` 비교 권장).
+
+| `tab` | `purchaseSub` | 원본 테이블·단위 | `q` 매칭 필드 | `date` / `month` 기준 |
+|-------|---------------|------------------|---------------|------------------------|
+| `purchase` | `product` | 상품매입 **라인** | `product_name`, `vendor`(스냅샷명), `order_no`, `memo`, **그룹 `group_name`**, `payment_date` 문자열 | `payment_date` |
+| `purchase` | `supply` | 부가 **라인** | `item_name`, `vendor`, `memo`, `payment_date` | `payment_date` |
+| `purchase` | `other` | 기타지출 **라인** | `item_name`, `memo`, `payment_date` | `payment_date` |
+| `sale` | — | 매출 **주문** 1건 | `order_no`, `customer_name`, **주문 항목 `product_name` 전체**(OR), `memo`, `order_date` | `order_date` |
+| `income` | — | 수익 **입금 라인** | `item_name`, `memo`, `deposit_date` | `deposit_date` |
+| `products` | — | 상품 **1건** | `name`, `sku`, `memo`, `category` | 없음 (`month`·`date` 생략) |
+
+**탭별 목록 API `q`와 정합성**
+
+- 상품매입: §3 `GET /purchase/products` — 그룹명·상품명·구매처·주문번호·비고
+- 부가: §4 `GET /purchase/supply` — 항목명·구매처·비고
+- 기타: §5 `GET /purchase/other` — 항목명·비고
+- 매출: §6 `GET /sales` — 주문번호·주문자명·상품명·비고
+- 수익: §7 `GET /income` — 항목명·비고
+- 상품: §8 `GET /products` — 상품명·SKU·메모·카테고리
+
+전역 검색은 위와 동일 범위 + **날짜 문자열 부분 일치**(`2026-06`, `06-04` 등)만 추가.
+
+**제외**
+
+- soft delete·비활성 정책은 각 도메인 목록 API와 동일
+- 매출 `status=cancelled` 주문: 탭 기본 목록과 동일하게 포함 여부 결정 (권장: **포함**, FE 시드도 구분 없음)
+- 상품매입 그룹 메타(추가금·할인) 텍스트는 검색 대상 **아님** (FE 동일)
+
+---
+
+### 2-4. 응답 — 결과 항목 스키마
 
 ```jsonc
 {
   "data": [
     {
-      "id": "pp-001",
-      "tab": "purchase",               // purchase | sale | income | products
-      "purchaseSub": "product",        // product | supply | other (tab=purchase 일 때)
-      "month": "2026-06",              // YYYY-MM (상품관리 제외)
-      "tabLabel": "매입",
-      "subLabel": "상품매입",          // 있을 때
+      "id": "purchase-product-pp-001",   // 목록 내 유일. 권장: "{tab}-{purchaseSub?}-{entityId}"
+      "tab": "purchase",                 // purchase | sale | income | products
+      "purchaseSub": "product",          // tab=purchase 일 때만. product | supply | other
+      "entityId": "pp-001",              // 원본 PK (P2: 행 포커스용, FE 미사용)
+      "month": "2026-06",                // YYYY-MM. products 탭은 생략 또는 null
       "title": "플레이브 피규어 A",
-      "subtitle": "도매몰A · NV-240501-01",
-      "date": "2026-06-04"
+      "subtitle": "도매몰A",             // 없으면 생략
+      "date": "2026-06-04"               // ISO date. products 탭은 생략 또는 null
     }
   ],
   "meta": { "total": 12, "page": 1, "limit": 30 }
 }
 ```
 
-> **딥링크**: FE는 응답의 `tab` / `purchaseSub` / `month` / `q` 로 URL 구성 후 이동.
+**`title` / `subtitle` / `date` 채우기 규칙** (FE 표시·정렬과 동일하게)
+
+| 구분 | `title` | `subtitle` | `date` |
+|------|---------|------------|--------|
+| 상품매입 라인 | `product_name` | `vendor` 스냅샷명 (없으면 생략) | `payment_date` |
+| 부가 라인 | `item_name` | `vendor` | `payment_date` |
+| 기타지출 라인 | `item_name` | `memo` (없으면 생략) | `payment_date` |
+| 매출 주문 | `order_no` 없으면 `customer_name` | 주문 항목 `product_name`을 공백으로 이어 붙임 | `order_date` |
+| 수익 라인 | `item_name` | `memo` (없으면 생략) | `deposit_date` |
+| 상품 | `name` | `"SKU " + sku` | 생략 |
+
+**`tabLabel` / `subLabel`**
+
+- FE가 클라이언트에서 한글 매핑 중 (`매입`·`상품매입` 등). **BE 응답 필수 아님**.
+- 내려줘도 FE는 무시하거나 덮어쓸 수 있음.
+
+**정렬** (전체 병합 후 1회)
+
+1. `date` 있는 항목: `date` **내림차순** (최신 우선)
+2. `date` 없음(상품): 같은 그룹 내에서 `title` **오름차순** (`ko` 로케일)
+3. `date` 동일 시 `title` 오름차순
+
+> FE `searchLedgerGlobally` 정렬 로직과 동일. DB에서 탭별로 정렬 후 merge sort 하거나, 앱 레이어에서 통합 정렬.
+
+---
+
+### 2-5. 응답 예시
+
+```jsonc
+// GET /ledger/search?q=플레이브&page=1&limit=30
+{
+  "data": [
+    {
+      "id": "purchase-product-pp-001",
+      "tab": "purchase",
+      "purchaseSub": "product",
+      "entityId": "pp-001",
+      "month": "2026-06",
+      "title": "플레이브 피규어 A",
+      "subtitle": "도매몰A",
+      "date": "2026-06-04"
+    },
+    {
+      "id": "sale-so-002",
+      "tab": "sale",
+      "entityId": "so-002",
+      "month": "2026-05",
+      "title": "SO-260501-02",
+      "subtitle": "플레이브 피규어 A 플레이브 피규어 B",
+      "date": "2026-05-28"
+    },
+    {
+      "id": "products-prd-010",
+      "tab": "products",
+      "entityId": "prd-010",
+      "title": "플레이브 굿즈 세트",
+      "subtitle": "SKU PLV-010"
+    }
+  ],
+  "meta": { "total": 3, "page": 1, "limit": 30 }
+}
+```
+
+---
+
+### 2-6. BE 구현 가이드
+
+**권장 구조**
+
+1. `q` 정규화: `trim`, 연속 공백 1칸, 빈 값 거부
+2. 탭별 쿼리 6개 병렬 실행 (각 `LIMIT`은 `(page-1)*limit ~ page*limit`보다 넉넉히 — 예: `limit * 2`)  
+   또는 DB `UNION ALL` + 윈도우 함수로 통합 페이징
+3. 매칭 건을 공통 DTO로 매핑 후 §2-4 정렬
+4. `meta.total` = 6개 소스 **매칭 건수 합** (중복 제거 없음 — 엔티티당 1행)
+
+**성능**
+
+- 인덱스: 각 테이블 `user_id` + 검색 텍스트 컬럼(`gin_trgm` 등) + 날짜 컬럼
+- `q` 최소 길이 제한 없음 (FE 동일). 과부하 시 BE에서 `q.length < 2` → `[]` 정책 가능 (FE에 사전 공지)
+
+**에러**
+
+| 상황 | code |
+|------|------|
+| 미인증 | `UNAUTHORIZED` |
+| `q` 누락 | `VALIDATION_ERROR` |
+
+---
+
+### 2-7. FE 연동 계획 (BE 완료 후)
+
+1. `src/lib/api/ledger-search.ts` — `fetchLedgerSearch(q, page?, limit?)`
+2. `ledger-global-search-dialog.tsx` — `useQuery` + debounce(300ms), `searchLedgerGlobally` 제거
+3. 응답 → `LedgerGlobalSearchResult` 매핑 (`tabLabel`/`subLabel`은 FE 상수로 부여)
+4. `*-pub-seed.ts` 전역 검색 참조 제거
+
+**결과 클릭 시 URL** (변경 없음)
+
+```
+/ledger?tab=purchase&purchaseSub=product&month=2026-06&q=플레이브
+/ledger?tab=products&q=SKU-001
+```
+
+---
+
+### 2-8. 추후 확장 (P2, FE·BE 공동)
+
+| 항목 | 설명 |
+|------|------|
+| `focusId` / `lineId` | 결과 선택 시 해당 **행** 스크롤·하이라이트 (`entityId` 활용) |
+| 무한 스크롤 | 모달에서 `page` 증가 로드 |
+| 하이라이트 스니펫 | `title` 내 매칭 구간 `<mark>` (선택) |
 
 ---
 
@@ -1654,7 +1830,7 @@
 
 | API | 보완 내용 |
 |-----|-----------|
-| `GET /ledger/search` | §2 스펙대로 서버 검색 (FE 전역 검색 연동 대기) |
+| `GET /ledger/search` | §2 전역 검색 — FE 시드 제거·API 연동 대기 |
 | `GET /ledger/summary` | `period=month` 시 전월 대비 `changePercent` meta 추가 (dashboard와 중복 시 dashboard만 구현해도 됨) |
 | `GET /products` | 응답 meta에 `outOfStockCount`, `lowStockCount` (대시보드 alerts와 공유) |
 
