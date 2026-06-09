@@ -33,6 +33,7 @@ import { PurchaseListToolbar } from "@/components/ledger/purchase/purchase-list-
 import { Button } from "@/components/ui/button";
 import {
   sanitizeAdjustments,
+  vendorGroupLinesTotal,
   type PurchaseGroupAdjustment,
 } from "@/types/purchase-group";
 import type { ProductPurchaseLine } from "@/types/purchase-product";
@@ -92,6 +93,21 @@ export function ProductPurchasePanel() {
 
   const stockReflectTarget = useMemo(() => {
     if (!stockReflectLine) return null;
+
+    let pricing: { totalOrder: number; totalExpense: number } | undefined;
+    for (const group of groups) {
+      for (const vendorGroup of group.vendorGroups) {
+        if (vendorGroup.lines.some((l) => l.id === stockReflectLine.id)) {
+          pricing = {
+            totalOrder: vendorGroupLinesTotal(vendorGroup.lines),
+            totalExpense: vendorGroup.subtotal,
+          };
+          break;
+        }
+      }
+      if (pricing) break;
+    }
+
     return {
       id: stockReflectLine.id,
       title: stockReflectLine.productName,
@@ -111,9 +127,10 @@ export function ProductPurchasePanel() {
         orderNo: stockReflectLine.orderNo,
         productLink: stockReflectLine.productLink,
         memo: stockReflectLine.memo,
+        pricing,
       },
     };
-  }, [stockReflectLine]);
+  }, [stockReflectLine, groups]);
 
   const openRegister = (paymentDate?: string) => {
     setEditLineId(null);
@@ -392,7 +409,6 @@ export function ProductPurchasePanel() {
               setPage(1);
             }}
             searchPlaceholder="그룹명, 상품명, 구매처, 주문번호 검색"
-            showExcelActions
             registerLabel="+ 상품 매입 등록"
             onRegister={() => openRegister()}
           />

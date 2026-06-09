@@ -54,6 +54,8 @@ export interface ProductRegisterDialogProps {
   stockReflectRegistration?: boolean;
   /** 재고반영 경로 — 확정 시 반영될 수량 (안내 문구용) */
   stockReflectQty?: number;
+  /** 재고반영(상품매입) — 목록과 동일한 추천 판매가 범위 */
+  recommendedPriceLabel?: string | null;
   /** true: 등록/저장 성공 alert 생략 (호출측 처리) */
   suppressSuccessAlert?: boolean;
   onSave: (input: InventoryProductInput) => Promise<InventoryProduct | void>;
@@ -73,6 +75,7 @@ export function ProductRegisterDialog({
   initialForm,
   stockReflectRegistration = false,
   stockReflectQty,
+  recommendedPriceLabel,
   suppressSuccessAlert = false,
   onSave,
   categories,
@@ -170,7 +173,7 @@ export function ProductRegisterDialog({
       return;
     }
     if (Number(form.currentPrice) <= 0) {
-      await alert("기본 가격을 입력해 주세요.");
+      await alert("판매가를 입력해 주세요.");
       return;
     }
     if (imageUploading) {
@@ -331,9 +334,16 @@ export function ProductRegisterDialog({
               />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="p-price">
-                기본 가격 <span className="text-[var(--color-danger)]">*</span>
-              </Label>
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+                <Label htmlFor="p-price">
+                  판매가 <span className="text-[var(--color-danger)]">*</span>
+                </Label>
+                {recommendedPriceLabel ? (
+                  <span className="text-xs tabular-nums text-[var(--color-text-muted)]">
+                    추천 {recommendedPriceLabel}
+                  </span>
+                ) : null}
+              </div>
               <Input
                 id="p-price"
                 type="number"

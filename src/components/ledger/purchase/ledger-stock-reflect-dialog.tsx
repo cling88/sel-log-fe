@@ -23,8 +23,10 @@ import {
   useCreateProduct,
 } from "@/hooks/use-products";
 import { fetchProducts } from "@/lib/api/products";
+import { useMarginRates } from "@/hooks/use-settings";
 import {
   buildProductPrefillFromPurchaseLine,
+  formatRecommendedPriceLabelFromPurchaseLine,
   type StockReflectLineContext,
 } from "@/lib/purchase-to-product-prefill";
 import { formatAmount } from "@/lib/purchase-product-calc";
@@ -80,7 +82,11 @@ export function LedgerStockReflectDialog({
     isUpdating: categoryUpdating,
     isDeleting: categoryDeleting,
   } = useCategories();
-
+  const { marginMinRate, marginMaxRate } = useMarginRates();
+  const marginRates = useMemo(
+    () => ({ min: marginMinRate, max: marginMaxRate }),
+    [marginMinRate, marginMaxRate],
+  );
   const skuSelectRef = useRef<HTMLDivElement | null>(null);
   const [qty, setQty] = useState(1);
   const [selectedSku, setSelectedSku] = useState<string | null>(null);
@@ -109,6 +115,14 @@ export function LedgerStockReflectDialog({
     if (!target?.lineContext) return null;
     return buildProductPrefillFromPurchaseLine(target.lineContext);
   }, [target?.lineContext]);
+
+  const recommendedPriceLabel = useMemo(() => {
+    if (!target?.lineContext) return null;
+    return formatRecommendedPriceLabelFromPurchaseLine(
+      target.lineContext,
+      marginRates,
+    );
+  }, [target?.lineContext, marginRates]);
 
   useEffect(() => {
     if (!open || !target) return;
@@ -330,6 +344,7 @@ export function LedgerStockReflectDialog({
         initialForm={productPrefill}
         stockReflectRegistration
         stockReflectQty={qty}
+        recommendedPriceLabel={recommendedPriceLabel}
         suppressSuccessAlert
         onSave={handleQuickProductSave}
         saving={createProduct.isPending}

@@ -1,6 +1,10 @@
 import { ApiError, apiFetch, type ApiEnvelope } from "@/lib/api-client";
-import type { SalesChannelSummary } from "@/types/sale-channel";
+import {
+  DEFAULT_PLATFORM_FEE_RATE,
+  type SalesChannelSummary,
+} from "@/types/sale-channel";
 import type {
+  SaleMarginEstimate,
   SaleOrder,
   SaleOrderAdjustment,
   SaleOrderItem,
@@ -102,9 +106,47 @@ function normalizeChannelSummary(raw: unknown): SalesChannelSummary | null {
   const row = raw as Record<string, unknown>;
   const id = normalizeChannelId(row.id);
   if (!id) return null;
+  const platformFeeRate = Number(row.platformFeeRate);
+  const storeNameRaw = normalizeOptionalString(row.storeName);
+  const storeUrlRaw = normalizeOptionalString(row.storeUrl);
   return {
     id,
     name: normalizeOptionalString(row.name),
+    platformFeeRate:
+      Number.isFinite(platformFeeRate) && platformFeeRate >= 0
+        ? platformFeeRate
+        : DEFAULT_PLATFORM_FEE_RATE,
+    storeName: storeNameRaw || null,
+    storeUrl: storeUrlRaw || null,
+  };
+}
+
+function normalizeMarginEstimateAssumptions(
+  raw: unknown,
+): SaleMarginEstimate["assumptions"] | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const row = raw as Record<string, unknown>;
+  const vatNote = normalizeOptionalString(row.vatNote);
+  const platformFeeNote = normalizeOptionalString(row.platformFeeNote);
+  if (!vatNote && !platformFeeNote) return undefined;
+  return {
+    ...(vatNote ? { vatNote } : {}),
+    ...(platformFeeNote ? { platformFeeNote } : {}),
+  };
+}
+
+export function normalizeMarginEstimate(raw: unknown): SaleMarginEstimate | null {
+  if (raw == null) return null;
+  if (typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  return {
+    estimatedCostTotal: Number(row.estimatedCostTotal) || 0,
+    estimatedGrossProfit: Number(row.estimatedGrossProfit) || 0,
+    estimatedVatAmount: Number(row.estimatedVatAmount) || 0,
+    estimatedPlatformFeeAmount: Number(row.estimatedPlatformFeeAmount) || 0,
+    estimatedNetProfit: Number(row.estimatedNetProfit) || 0,
+    hasUnknownCost: row.hasUnknownCost === true,
+    assumptions: normalizeMarginEstimateAssumptions(row.assumptions),
   };
 }
 
@@ -123,6 +165,8 @@ export function normalizeSaleOrder(raw: unknown): SaleOrder {
   const channel = normalizeChannelSummary(row.channel);
   const channelId = normalizeChannelId(row.channelId) ?? channel?.id ?? null;
 
+  const status = normalizeStatus(row.status);
+
   return {
     id: String(row.id ?? ""),
     orderDate: normalizeOptionalString(row.orderDate),
@@ -137,7 +181,11 @@ export function normalizeSaleOrder(raw: unknown): SaleOrder {
     discountAmount: Number(row.discountAmount) || 0,
     totalAmount: Number(row.totalAmount) || 0,
     memo: normalizeOptionalString(row.memo) || undefined,
-    status: normalizeStatus(row.status),
+    status,
+    marginEstimate:
+      status === "cancelled"
+        ? null
+        : normalizeMarginEstimate(row.marginEstimate),
   };
 }
 
@@ -278,4 +326,63 @@ export async function deleteSaleOrder(id: string): Promise<void> {
   await apiFetch<ApiEnvelope<{ ok?: boolean }>>(`/sales/${id}`, {
     method: "DELETE",
   });
+}
+
+export type SaleOrderNoCheckResult = {
+  exists: boolean;
+  order?: {
+    id: string;
+    orderNo: string;
+    orderDate: string;
+    status: SaleOrderStatus;
+  };
+};
+
+/** POST /api/v1/sales/estimate-margin — 등록·수정 모달 미리보기 */
+export async function estimateSaleMargin(
+  body: SaleOrderPayload,
+): Promise<SaleMarginEstimate> {
+  const res = await apiFetch<ApiEnvelope<Record<string, unknown>>>(
+    "/sales/estimate-margin",
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
+  return (
+    normalizeMarginEstimate(res.data) ?? {
+      estimatedCostTotal: 0,
+      estimatedGrossProfit: 0,
+      estimatedVatAmount: 0,
+      estimatedPlatformFeeAmount: 0,
+      estimatedNetProfit: 0,
+      hasUnknownCost: false,
+    }
+  );
+}
+
+/** GET /api/v1/sales/check-order-no */
+export async function checkSaleOrderNo(
+  orderNo: string,
+  excludeId?: string,
+): Promise<SaleOrderNoCheckResult> {
+  const search = new URLSearchParams({ orderNo: orderNo.trim() });
+  if (excludeId?.trim()) search.set("excludeId", excludeId.trim());
+  const res = await apiFetch<ApiEnvelope<Record<string, unknown>>>(
+    `/sales/check-order-no?${search}`,
+  );
+  const row = (res.data ?? {}) as Record<string, unknown>;
+  const exists = row.exists === true;
+  if (!exists) return { exists: false };
+  const orderRaw = row.order as Record<string, unknown> | undefined;
+  if (!orderRaw) return { exists: true };
+  return {
+    exists: true,
+    order: {
+      id: String(orderRaw.id ?? ""),
+      orderNo: normalizeOptionalString(orderRaw.orderNo),
+      orderDate: normalizeOptionalString(orderRaw.orderDate),
+      status: normalizeStatus(orderRaw.status),
+    },
+  };
 }

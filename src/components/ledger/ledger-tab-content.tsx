@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { IncomeTabPanel } from "@/components/ledger/income/income-tab-panel";
 import { LedgerMonthTabs, LedgerMonthTabsSpacer } from "@/components/ledger/ledger-month-tabs";
+import { LedgerExcelDownloadActions } from "@/components/ledger/ledger-excel-download-actions";
 import { PurchaseTabPanel } from "@/components/ledger/purchase/purchase-tab-panel";
 import { ProductsTabPanel } from "@/components/ledger/products/products-tab-panel";
 import { SaleTabPanel } from "@/components/ledger/sale/sale-tab-panel";
@@ -34,11 +35,16 @@ export function LedgerTabContent() {
 
   return (
     <div className="overflow-hidden relative ">
-      {showMonthTabs ? (
-        <LedgerMonthTabs tabId={activeTab} />
-      ) : (
-        <LedgerMonthTabsSpacer />
-      )}
+      <div className="relative z-10 mb-[-1px] flex items-end gap-2 sm:gap-3">
+        <div className="min-w-0 flex-1 overflow-hidden">
+          {showMonthTabs ? (
+            <LedgerMonthTabs tabId={activeTab} />
+          ) : (
+            <LedgerMonthTabsSpacer />
+          )}
+        </div>
+        <LedgerExcelDownloadActions tabId={activeTab} />
+      </div>
       <div className="relative z-0 rounded-xl border border-[var(--color-text-muted)] bg-white p-4 shadow-[var(--shadow-md)] sm:p-6">
         {panel}
       </div>

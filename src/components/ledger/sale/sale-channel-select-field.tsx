@@ -108,13 +108,13 @@ export function SaleChannelSelectField({
               }
             : undefined
         }
-        onCreate={async (name) => {
-          const created = await createChannel({ name });
+        onCreate={async (body) => {
+          const created = await createChannel(body);
           onChannelIdChange(created.id);
           setDialogOpen(false);
         }}
-        onUpdate={async (id, name) => {
-          await updateChannel(id, { name });
+        onUpdate={async (id, body) => {
+          await updateChannel(id, body);
         }}
         onDelete={async (id) => {
           await deleteChannel(id);

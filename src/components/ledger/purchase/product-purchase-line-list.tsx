@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  lineRowClickableClass,
   lineRowClickHandlers,
   stopRowClickPropagation,
 } from "@/components/ledger/purchase/purchase-line-row-click";
@@ -12,13 +11,17 @@ import {
   calcUnitPrice,
   formatAmount,
   formatRecommendedPriceRange,
+  type MarginRateRange,
 } from "@/lib/purchase-product-calc";
+import { useMarginRates } from "@/hooks/use-settings";
 import { formatPurchaseLineBankLabel } from "@/lib/purchase-bank-display";
 import { formatPurchaseLineVendorLabel } from "@/lib/purchase-vendor-display";
 import { PurchaseVendorLabel } from "@/components/ledger/purchase/purchase-vendor-label";
 import type { ProductPurchaseLine } from "@/types/purchase-product";
 import {
   purchasePrimaryActionClass,
+  purchaseProductLineClickClass,
+  purchaseProductStockPendingBgClass,
   purchaseStatusBadgeDoneClass,
   purchaseTableScrollClass,
   purchaseTableShellClass,
@@ -80,13 +83,18 @@ function StockActions({
 
   if (line.stockReflected) {
     return (
-      <div className={cn("flex flex-wrap items-center gap-1.5", compact && "w-full")}>
+      <div
+        className={cn(
+          "flex flex-col items-center gap-1",
+          compact && "w-full",
+        )}
+      >
         <span className={purchaseStatusBadgeDoneClass}>반영완료</span>
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 px-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+          className="h-6 px-1.5 text-[11px] font-semibold text-[var(--color-danger)] underline-offset-2 hover:bg-red-50 hover:text-red-700 hover:underline"
           onClick={() => onCancelStockReflect(line.id)}
         >
           반영취소
@@ -218,7 +226,7 @@ function DesktopHeader() {
       <div className={cn(headerCellClass, "justify-end")} role="columnheader">
         추천판매가
       </div>
-      <div className={headerCellClass} role="columnheader">
+      <div className={cn(headerCellClass, "justify-center")} role="columnheader">
         재고
       </div>
       <div className={headerCellClass} role="columnheader">
@@ -237,6 +245,7 @@ function clickableCellProps(
   groupDisabled: boolean | undefined,
   rowBg: string,
   rowBorder: string,
+  stockPending: boolean,
   extra?: string,
 ) {
   return {
@@ -244,7 +253,7 @@ function clickableCellProps(
       bodyCellClass,
       rowBg,
       rowBorder,
-      lineRowClickableClass(groupDisabled),
+      purchaseProductLineClickClass(groupDisabled, stockPending),
       extra,
     ),
     ...lineRowClickHandlers(lineId, onLineClick, groupDisabled),
@@ -255,6 +264,7 @@ function DesktopRow({
   line,
   index,
   pricing,
+  marginRates,
   groupDisabled,
   onReflectStock,
   onCancelStockReflect,
@@ -263,6 +273,7 @@ function DesktopRow({
   line: ProductPurchaseLine;
   index: number;
   pricing: ProductGroupPricing;
+  marginRates: MarginRateRange;
   groupDisabled?: boolean;
   onReflectStock: (lineId: string) => void;
   onCancelStockReflect: (lineId: string) => void;
@@ -274,12 +285,10 @@ function DesktopRow({
     pricing.totalOrder,
     pricing.totalExpense,
   );
-  const recommended = formatRecommendedPriceRange(unitPrice, finalUnit);
+  const recommended = formatRecommendedPriceRange(unitPrice, finalUnit, marginRates);
 
   const pending = !line.stockReflected && !groupDisabled;
-  const rowBg = cn(
-    pending ? "bg-[var(--primary-50)]/15" : "bg-white",
-  );
+  const rowBg = purchaseProductStockPendingBgClass(pending);
   const rowBorder = index > 0 ? "border-t border-[var(--color-border)]/80" : "";
 
   return (
@@ -291,6 +300,7 @@ function DesktopRow({
           groupDisabled,
           rowBg,
           rowBorder,
+          pending,
           "justify-center tabular-nums text-[var(--color-text-muted)]",
         )}
       >
@@ -303,6 +313,7 @@ function DesktopRow({
           groupDisabled,
           rowBg,
           rowBorder,
+          pending,
           cn(truncateCellClass, "text-[var(--color-text-secondary)]"),
         )}
       >
@@ -315,6 +326,7 @@ function DesktopRow({
           groupDisabled,
           rowBg,
           rowBorder,
+          pending,
           "justify-center px-1",
         )}
       >
@@ -327,6 +339,7 @@ function DesktopRow({
           groupDisabled,
           rowBg,
           rowBorder,
+          pending,
           truncateCellClass,
         )}
       >
@@ -339,6 +352,7 @@ function DesktopRow({
           groupDisabled,
           rowBg,
           rowBorder,
+          pending,
           cn(truncateCellClass, "text-[var(--color-text-secondary)]"),
         )}
       >
@@ -356,6 +370,7 @@ function DesktopRow({
           groupDisabled,
           rowBg,
           rowBorder,
+          pending,
           "justify-end whitespace-nowrap tabular-nums",
         )}
       >
@@ -368,6 +383,7 @@ function DesktopRow({
           groupDisabled,
           rowBg,
           rowBorder,
+          pending,
           "justify-end whitespace-nowrap tabular-nums",
         )}
       >
@@ -380,6 +396,7 @@ function DesktopRow({
           groupDisabled,
           rowBg,
           rowBorder,
+          pending,
           "justify-end whitespace-nowrap tabular-nums",
         )}
       >
@@ -392,6 +409,7 @@ function DesktopRow({
           groupDisabled,
           rowBg,
           rowBorder,
+          pending,
           "justify-end whitespace-nowrap tabular-nums",
         )}
       >
@@ -404,13 +422,18 @@ function DesktopRow({
           groupDisabled,
           rowBg,
           rowBorder,
+          pending,
           cn(truncateCellClass, "justify-end text-[var(--color-text-secondary)]"),
         )}
       >
-        <TruncatedText value={recommended} fallback="—" />
+        <TruncatedText
+          value={recommended}
+          fallback="—"
+          className="text-right"
+        />
       </div>
       <div
-        className={cn(bodyCellClass, rowBg, rowBorder)}
+        className={cn(bodyCellClass, rowBg, rowBorder, "justify-center")}
         onClick={stopRowClickPropagation}
         onKeyDown={stopRowClickPropagation}
       >
@@ -428,6 +451,7 @@ function DesktopRow({
           groupDisabled,
           rowBg,
           rowBorder,
+          pending,
           cn(truncateCellClass, "text-[var(--color-text-secondary)]"),
         )}
       >
@@ -440,6 +464,7 @@ function DesktopRow({
           groupDisabled,
           rowBg,
           rowBorder,
+          pending,
           cn(truncateCellClass, "text-[var(--color-text-muted)]"),
         )}
       >
@@ -453,6 +478,7 @@ function MobileCard({
   line,
   index,
   pricing,
+  marginRates,
   groupDisabled,
   onReflectStock,
   onCancelStockReflect,
@@ -461,6 +487,7 @@ function MobileCard({
   line: ProductPurchaseLine;
   index: number;
   pricing: ProductGroupPricing;
+  marginRates: MarginRateRange;
   groupDisabled?: boolean;
   onReflectStock: (lineId: string) => void;
   onCancelStockReflect: (lineId: string) => void;
@@ -501,18 +528,20 @@ function MobileCard({
     { label: "최종개당", value: `${formatAmount(finalUnit)}원` },
     {
       label: "추천판매가",
-      value: formatRecommendedPriceRange(unitPrice, finalUnit),
+      value: formatRecommendedPriceRange(unitPrice, finalUnit, marginRates),
     },
     { label: "출금계좌", value: formatPurchaseLineBankLabel(line) },
     { label: "비고", value: line.memo || "—" },
   ];
 
+  const stockPending = !line.stockReflected && !groupDisabled;
+
   return (
     <article
       className={cn(
-        "rounded-xl border border-[var(--color-border)] bg-white px-3.5 py-2.5 shadow-[var(--shadow-sm)]",
-        !line.stockReflected && !groupDisabled && "border-l-[3px] border-l-[var(--color-warning)]",
-        !groupDisabled && lineRowClickableClass(groupDisabled),
+        "rounded-xl border border-[var(--color-border)] px-3.5 py-2.5 shadow-[var(--shadow-sm)]",
+        purchaseProductStockPendingBgClass(stockPending),
+        purchaseProductLineClickClass(groupDisabled, stockPending),
       )}
       {...lineRowClickHandlers(line.id, onLineClick, groupDisabled)}
     >
@@ -557,6 +586,12 @@ export function ProductPurchaseLineList({
   onCancelStockReflect,
   onLineClick,
 }: ProductPurchaseLineListProps) {
+  const { marginMinRate, marginMaxRate } = useMarginRates();
+  const marginRates: MarginRateRange = {
+    min: marginMinRate,
+    max: marginMaxRate,
+  };
+
   return (
     <>
       <div className={cn("hidden md:block", purchaseTableScrollClass)}>
@@ -569,6 +604,7 @@ export function ProductPurchaseLineList({
                 line={line}
                 index={index}
                 pricing={pricing}
+                marginRates={marginRates}
                 groupDisabled={groupDisabled}
                 onReflectStock={onReflectStock}
                 onCancelStockReflect={onCancelStockReflect}
@@ -586,6 +622,7 @@ export function ProductPurchaseLineList({
               line={line}
               index={index}
               pricing={pricing}
+              marginRates={marginRates}
               groupDisabled={groupDisabled}
               onReflectStock={onReflectStock}
               onCancelStockReflect={onCancelStockReflect}

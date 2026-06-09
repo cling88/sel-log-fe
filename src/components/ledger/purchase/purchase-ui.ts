@@ -15,7 +15,7 @@ export const purchaseGroupBodyClass =
   "min-w-0 space-y-2 border-t border-[var(--color-border)] px-2.5 py-2";
 
 export const purchaseGroupFooterClass =
-  "flex flex-wrap items-center justify-end gap-2 rounded-lg bg-[var(--color-bg)] px-2.5 py-2";
+  "flex flex-wrap items-center justify-end gap-2 rounded-lg px-2.5 py-2";
 
 /** PC 목록 테이블 */
 export const purchaseTableScrollClass = "overflow-x-auto";
@@ -33,6 +33,22 @@ export function purchaseTableRowClass(pending?: boolean) {
   return cn(
     "bg-white transition-colors hover:bg-[var(--primary-50)]/20",
     pending && "bg-[var(--primary-50)]/15",
+  );
+}
+
+/** 상품매입 — 재고 미반영 라인 배경 */
+export function purchaseProductStockPendingBgClass(pending?: boolean) {
+  return pending ? "bg-red-50" : "bg-white";
+}
+
+export function purchaseProductLineClickClass(
+  disabled?: boolean,
+  stockPending?: boolean,
+) {
+  if (disabled) return "";
+  return cn(
+    "cursor-pointer transition-colors",
+    stockPending ? "hover:bg-red-100" : "hover:bg-[var(--primary-50)]/25",
   );
 }
 

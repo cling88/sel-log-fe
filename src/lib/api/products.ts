@@ -5,6 +5,7 @@ import type {
   ProductHistoryFilterId,
   UnifiedHistoryEntry,
 } from "@/lib/product-unified-history";
+import type { ProductStockStatus } from "@/types/dashboard";
 import type {
   InventoryPriceHistoryItem,
   InventoryProduct,
@@ -21,6 +22,8 @@ export type ProductsListMeta = {
   total: number;
   page: number;
   limit: number;
+  outOfStockCount?: number;
+  lowStockCount?: number;
 };
 
 export type ProductsListResult = {
@@ -75,7 +78,17 @@ function normalizeListMeta(
     typeof meta?.total === "number" && meta.total > 0
       ? meta.total
       : itemsLength;
-  return { total, page, limit };
+  return {
+    total,
+    page,
+    limit,
+    ...(typeof meta?.outOfStockCount === "number"
+      ? { outOfStockCount: meta.outOfStockCount }
+      : {}),
+    ...(typeof meta?.lowStockCount === "number"
+      ? { lowStockCount: meta.lowStockCount }
+      : {}),
+  };
 }
 
 function normalizeOptionalNumber(value: unknown): number | undefined {
@@ -275,6 +288,7 @@ export function toCreateProductPayload(input: InventoryProductInput) {
 export type FetchProductsParams = {
   q?: string;
   active?: boolean;
+  stockStatus?: ProductStockStatus | ProductStockStatus[];
   page?: number;
   limit?: number;
 };
@@ -286,6 +300,12 @@ export async function fetchProducts(
   const search = new URLSearchParams();
   if (params?.q?.trim()) search.set("q", params.q.trim());
   if (params?.active !== undefined) search.set("active", String(params.active));
+  if (params?.stockStatus) {
+    const values = Array.isArray(params.stockStatus)
+      ? params.stockStatus
+      : [params.stockStatus];
+    search.set("stockStatus", values.join(","));
+  }
   search.set("page", String(params?.page ?? DEFAULT_LIST_PAGE));
   search.set("limit", String(params?.limit ?? PRODUCTS_LIST_PAGE_SIZE));
 

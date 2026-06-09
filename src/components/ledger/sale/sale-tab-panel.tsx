@@ -6,6 +6,7 @@ import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { useLedgerMonthParam } from "@/hooks/use-ledger-month";
 import { useLedgerUrlSearch } from "@/hooks/use-ledger-url-search";
 import { PRODUCTS_QUERY_KEY } from "@/hooks/use-products";
+import { useUserSettings } from "@/hooks/use-settings";
 import { SALES_CHANNELS_QUERY_KEY } from "@/hooks/use-sales-channels";
 import {
   getSaleErrorMessage,
@@ -23,6 +24,7 @@ import {
   ledgerListFooterClass,
 } from "@/components/ledger/ledger-list-shell";
 import { SaleOrderList } from "@/components/ledger/sale/sale-order-list";
+import { SaleMarginEstimateDisplay } from "@/components/ledger/sale/sale-margin-estimate";
 import { SaleChannelSelectField } from "@/components/ledger/sale/sale-channel-select-field";
 import { PurchaseListPagination } from "@/components/ledger/purchase/purchase-list-pagination";
 import { PurchaseListToolbar } from "@/components/ledger/purchase/purchase-list-toolbar";
@@ -40,11 +42,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { fetchProducts } from "@/lib/api/products";
 import { fetchSalesChannels } from "@/lib/api/sales-channels";
-import { toSaleOrderPayload } from "@/lib/api/sales";
+import { estimateSaleMargin, checkSaleOrderNo, toSaleOrderPayload } from "@/lib/api/sales";
 import { todayIso } from "@/lib/date";
 import { formatAmount } from "@/lib/purchase-product-calc";
 import type { InventoryProduct } from "@/types/inventory-product";
-import type { SaleOrder, SaleOrderAdjustment } from "@/types/sale";
+import type { SaleMarginEstimate, SaleOrder, SaleOrderAdjustment } from "@/types/sale";
 
 const PRODUCTS_PICKER_QUERY_KEY = [...PRODUCTS_QUERY_KEY, "picker", "sale"] as const;
 
@@ -83,12 +85,12 @@ function createEmptyAdjustment(): SaleOrderAdjustment {
   };
 }
 
-function createEmptyInput(): SaleOrderFormInput {
+function createEmptyInput(defaultChannelId?: string | null): SaleOrderFormInput {
   return {
     orderDate: todayIso(),
     orderNo: "",
     customerName: "",
-    channelId: null,
+    channelId: defaultChannelId ?? null,
     items: [createEmptyItem()],
     extraAdjustments: [],
     discountAdjustments: [],
@@ -176,12 +178,23 @@ function SaleRegisterDialog({
   onSave,
   onUpdate,
 }: SaleRegisterDialogProps) {
+  const { settings } = useUserSettings();
   const isEdit = !!editOrder;
   const readOnly = editOrder?.status === "cancelled";
-  const [form, setForm] = useState<SaleOrderFormInput>(createEmptyInput);
+  const [form, setForm] = useState<SaleOrderFormInput>(() =>
+    createEmptyInput(settings.defaultChannelId),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [orderNoDuplicate, setOrderNoDuplicate] = useState<string | null>(null);
+  const [orderNoChecking, setOrderNoChecking] = useState(false);
+  const [marginEstimate, setMarginEstimate] = useState<SaleMarginEstimate | null>(
+    null,
+  );
+  const [marginLoading, setMarginLoading] = useState(false);
   const formSessionRef = useRef<string | null>(null);
+  const estimateRequestIdRef = useRef(0);
+  const orderNoCheckRef = useRef(0);
 
   useEffect(() => {
     if (!open) {
@@ -222,12 +235,105 @@ function SaleRegisterDialog({
               : [],
         memo: editOrder.memo ?? "",
       });
+      setMarginEstimate(editOrder.marginEstimate);
       setError(null);
       return;
     }
-    setForm(createEmptyInput());
+    setForm(createEmptyInput(settings.defaultChannelId));
     setError(null);
-  }, [open, editOrder, getSuggestedUnitPrice]);
+    setMarginEstimate(null);
+    setOrderNoDuplicate(null);
+  }, [open, editOrder, getSuggestedUnitPrice, settings.defaultChannelId]);
+
+  useEffect(() => {
+    if (!open || readOnly) {
+      setOrderNoDuplicate(null);
+      setOrderNoChecking(false);
+      return;
+    }
+
+    const orderNo = form.orderNo.trim();
+    if (!orderNo) {
+      setOrderNoDuplicate(null);
+      setOrderNoChecking(false);
+      return;
+    }
+
+    const requestId = orderNoCheckRef.current + 1;
+    orderNoCheckRef.current = requestId;
+    setOrderNoChecking(true);
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const result = await checkSaleOrderNo(
+            orderNo,
+            editOrder?.id,
+          );
+          if (orderNoCheckRef.current !== requestId) return;
+          if (result.exists && result.order) {
+            setOrderNoDuplicate(
+              `이미 등록된 주문번호입니다 (${result.order.orderDate}, ${result.order.status === "cancelled" ? "취소" : "정상"})`,
+            );
+          } else {
+            setOrderNoDuplicate(null);
+          }
+        } catch {
+          if (orderNoCheckRef.current !== requestId) return;
+          setOrderNoDuplicate(null);
+        } finally {
+          if (orderNoCheckRef.current === requestId) {
+            setOrderNoChecking(false);
+          }
+        }
+      })();
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [open, readOnly, form.orderNo, editOrder?.id]);
+
+  useEffect(() => {
+    if (!open || readOnly) {
+      setMarginEstimate(null);
+      setMarginLoading(false);
+      return;
+    }
+
+    const hasProduct = form.items.some((item) => item.productId.trim());
+    if (!hasProduct) {
+      setMarginEstimate(null);
+      setMarginLoading(false);
+      return;
+    }
+
+    const requestId = estimateRequestIdRef.current + 1;
+    estimateRequestIdRef.current = requestId;
+    setMarginLoading(true);
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const payload = formInputToPayload(form);
+          const result = await estimateSaleMargin(payload);
+          if (estimateRequestIdRef.current !== requestId) return;
+          setMarginEstimate(result);
+        } catch {
+          if (estimateRequestIdRef.current !== requestId) return;
+          setMarginEstimate(null);
+        } finally {
+          if (estimateRequestIdRef.current === requestId) {
+            setMarginLoading(false);
+          }
+        }
+      })();
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [open, readOnly, form]);
 
   const patch = (p: Partial<SaleOrderFormInput>) => {
     if (readOnly) return;
@@ -301,6 +407,10 @@ function SaleRegisterDialog({
     const validationError = validateSaleOrderForm(form);
     if (validationError) {
       setError(validationError);
+      return;
+    }
+    if (orderNoDuplicate) {
+      setError(orderNoDuplicate);
       return;
     }
 
@@ -400,6 +510,15 @@ function SaleRegisterDialog({
                 onChange={(e) => patch({ orderNo: e.target.value })}
                 placeholder="예: SO-20260602-001"
               />
+              {orderNoChecking ? (
+                <p className="text-[11px] text-[var(--color-text-muted)]">
+                  주문번호 확인 중…
+                </p>
+              ) : orderNoDuplicate ? (
+                <p className="text-[11px] text-[var(--color-danger)]">
+                  {orderNoDuplicate}
+                </p>
+              ) : null}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="sale-customer">
@@ -642,10 +761,45 @@ function SaleRegisterDialog({
                 )}
               </div>
             </div>
-            <div className="space-y-1.5 sm:col-span-2">
+            <div className="space-y-2 sm:col-span-2">
               <Label>총 주문금액 (자동계산)</Label>
-              <div className="flex h-9 items-center rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 text-sm font-semibold tabular-nums">
-                {formatAmount(totalAmount)}원
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]/50 px-3 py-2.5">
+                <div className="space-y-1 text-xs tabular-nums text-[var(--color-text-secondary)]">
+                  <p>
+                    품목합계{" "}
+                    <span className="font-medium text-[var(--color-text-primary)]">
+                      {formatAmount(itemsAmount)}원
+                    </span>
+                  </p>
+                  {form.extraAdjustments.map((item) =>
+                    (Number(item.amount) || 0) > 0 ? (
+                      <p key={item.id}>
+                        + {item.label.trim() || "추가금"}{" "}
+                        <span className="font-medium text-[var(--color-text-primary)]">
+                          {formatAmount(Number(item.amount) || 0)}원
+                        </span>
+                      </p>
+                    ) : null,
+                  )}
+                  {form.discountAdjustments.map((item) =>
+                    (Number(item.amount) || 0) > 0 ? (
+                      <p key={item.id}>
+                        − {item.label.trim() || "할인"}{" "}
+                        <span className="font-medium text-[var(--color-text-primary)]">
+                          {formatAmount(Number(item.amount) || 0)}원
+                        </span>
+                      </p>
+                    ) : null,
+                  )}
+                  <p className="text-sm font-semibold text-[var(--color-text-primary)]">
+                    = 총 {formatAmount(totalAmount)}원
+                  </p>
+                </div>
+                <SaleMarginEstimateDisplay
+                  margin={marginEstimate}
+                  loading={marginLoading}
+                  className="mt-2"
+                />
               </div>
             </div>
             <div className="space-y-1.5 sm:col-span-2">

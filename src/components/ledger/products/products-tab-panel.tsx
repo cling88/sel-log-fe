@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -58,6 +59,7 @@ import type {
   InventoryStockHistoryItem,
 } from "@/types/inventory-product";
 import type { InventoryCategory } from "@/types/inventory-category";
+import type { ProductStockStatus } from "@/types/dashboard";
 
 const PRODUCTS_STORAGE_KEY = "sellog-products-pub-v1";
 const PRODUCT_SEED_ISO = "2026-01-01T00:00:00.000Z";
@@ -85,7 +87,7 @@ const SAMPLE_PRICE_HISTORY: InventoryPriceHistoryItem[] = [
     atIso: PRODUCT_SEED_ISO,
     price: 25000,
     source: "product_register",
-    reason: "상품 등록 기본가",
+    reason: "상품 등록 판매가",
   },
 ];
 
@@ -316,6 +318,20 @@ function StockAdjustDialog({
 }
 
 export function ProductsTabPanel() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const stockStatusParam = searchParams.get("stockStatus");
+  const stockStatus = useMemo((): ProductStockStatus | null => {
+    if (
+      stockStatusParam === "out_of_stock" ||
+      stockStatusParam === "low_stock" ||
+      stockStatusParam === "in_stock"
+    ) {
+      return stockStatusParam;
+    }
+    return null;
+  }, [stockStatusParam]);
+
   const { alert, confirm } = useAppDialog();
   const { search, committedSearch, setSearch, applySearch } = useLedgerUrlSearch({
     commit: "manual",
@@ -352,6 +368,15 @@ export function ProductsTabPanel() {
 
   const [stockDialogOpen, setStockDialogOpen] = useState(false);
   const [listPage, setListPage] = useState(1);
+
+  const setStockStatusFilter = (next: ProductStockStatus | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next) params.set("stockStatus", next);
+    else params.delete("stockStatus");
+    router.replace(`/ledger?${params.toString()}`);
+    setListPage(1);
+  };
+
   const defaultHistoryYm = getTodayYearMonth();
   const [historyYear, setHistoryYear] = useState(defaultHistoryYm.year);
   const [historyMonth, setHistoryMonth] = useState(defaultHistoryYm.month);
@@ -360,7 +385,7 @@ export function ProductsTabPanel() {
 
   useEffect(() => {
     setListPage(1);
-  }, [committedSearch]);
+  }, [committedSearch, stockStatus]);
 
   const hasCommittedSearch = committedSearch.trim().length > 0;
 
@@ -380,7 +405,7 @@ export function ProductsTabPanel() {
     isError: productsLoadError,
     error: productsError,
     refetch: refetchProducts,
-  } = useProductsList(committedSearch, listPage);
+  } = useProductsList(committedSearch, listPage, { stockStatus });
 
   const products = productsListData?.items ?? [];
   const productsMeta = productsListData?.meta;
@@ -663,7 +688,7 @@ export function ProductsTabPanel() {
                               <span className="tabular-nums font-medium text-[var(--color-text-primary)]">
                                 {p.stock}
                               </span>
-                              {" · 기본가 "}
+                              {" · 판매가 "}
                               <span className="tabular-nums font-medium text-[var(--color-text-primary)]">
                                 {formatAmount(p.currentPrice ?? 0)}원
                               </span>
@@ -698,6 +723,34 @@ export function ProductsTabPanel() {
               registerLabel="+ 상품 등록"
               onRegister={openRegister}
             />
+            <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)]/80 px-3 py-2">
+              {(
+                [
+                  { id: null, label: "전체" },
+                  { id: "out_of_stock" as const, label: "품절" },
+                  { id: "low_stock" as const, label: "품절임박" },
+                  { id: "in_stock" as const, label: "재고 있음" },
+                ] as const
+              ).map((chip) => (
+                <Button
+                  key={chip.label}
+                  type="button"
+                  size="sm"
+                  variant={stockStatus === chip.id ? "default" : "outline"}
+                  className="h-7 text-xs"
+                  onClick={() => setStockStatusFilter(chip.id)}
+                >
+                  {chip.label}
+                  {chip.id === "out_of_stock" &&
+                  productsMeta?.outOfStockCount != null
+                    ? ` ${productsMeta.outOfStockCount}`
+                    : ""}
+                  {chip.id === "low_stock" && productsMeta?.lowStockCount != null
+                    ? ` ${productsMeta.lowStockCount}`
+                    : ""}
+                </Button>
+              ))}
+            </div>
             <div className={ledgerListBodyClass}>{renderListBody()}</div>
             {!productsLoading && !productsLoadError ? (
               <div className={ledgerListFooterClass}>
@@ -798,7 +851,7 @@ export function ProductsTabPanel() {
                   </p>
                 </div>
                 <div className="rounded-xl border border-[var(--color-border)] bg-white p-3">
-                  <p className="text-xs text-[var(--color-text-secondary)]">기본 가격</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">판매가</p>
                   <p className="mt-1 text-lg font-semibold tabular-nums">
                     {formatAmount(selectedProduct.currentPrice ?? 0)}원
                   </p>

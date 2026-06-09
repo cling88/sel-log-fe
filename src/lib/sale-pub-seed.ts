@@ -38,6 +38,7 @@ export function createPubSeedSaleOrders(today: string): SaleOrder[] {
       totalAmount: 50000,
       memo: "퍼블 샘플 주문",
       status: "normal",
+      marginEstimate: null,
     },
     {
       id: "sale-seed-2",
@@ -61,6 +62,7 @@ export function createPubSeedSaleOrders(today: string): SaleOrder[] {
       discountAmount: 0,
       totalAmount: 30000,
       status: "cancelled",
+      marginEstimate: null,
     },
   ];
 }

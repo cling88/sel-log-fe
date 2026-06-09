@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { formatDisplayDate } from "@/lib/date";
 import { formatAmount } from "@/lib/purchase-product-calc";
 import { formatSaleChannelLabel } from "@/lib/sale-channel-label";
+import { SaleMarginEstimateDisplay } from "@/components/ledger/sale/sale-margin-estimate";
 import type { SaleOrder } from "@/types/sale";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -202,36 +203,41 @@ export function SaleOrderList({
                 ) : null}
 
                 <div className={purchaseGroupFooterClass}>
-                  <div className="mr-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-[var(--color-text-secondary)]">
-                    <span>
-                      품목합계{" "}
-                      <span className="font-medium text-[var(--color-text-primary)]">
-                        {formatAmount(itemsSubtotal)}원
+                  <div className="mr-auto min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-[var(--color-text-secondary)]">
+                      <span>
+                        품목합계{" "}
+                        <span className="font-medium text-[var(--color-text-primary)]">
+                          {formatAmount(itemsSubtotal)}원
+                        </span>
                       </span>
-                    </span>
-                    {order.extraAdjustments.map((adj) =>
-                      adj.amount > 0 ? (
-                        <span key={adj.id}>
-                          + {adj.label || "추가금"}{" "}
-                          <span className="font-medium text-[var(--color-text-primary)]">
-                            {formatAmount(adj.amount)}원
+                      {order.extraAdjustments.map((adj) =>
+                        adj.amount > 0 ? (
+                          <span key={adj.id}>
+                            + {adj.label || "추가금"}{" "}
+                            <span className="font-medium text-[var(--color-text-primary)]">
+                              {formatAmount(adj.amount)}원
+                            </span>
                           </span>
-                        </span>
-                      ) : null,
-                    )}
-                    {order.discountAdjustments.map((adj) =>
-                      adj.amount > 0 ? (
-                        <span key={adj.id}>
-                          − {adj.label || "할인"}{" "}
-                          <span className="font-medium text-[var(--color-text-primary)]">
-                            {formatAmount(adj.amount)}원
+                        ) : null,
+                      )}
+                      {order.discountAdjustments.map((adj) =>
+                        adj.amount > 0 ? (
+                          <span key={adj.id}>
+                            − {adj.label || "할인"}{" "}
+                            <span className="font-medium text-[var(--color-text-primary)]">
+                              {formatAmount(adj.amount)}원
+                            </span>
                           </span>
-                        </span>
-                      ) : null,
-                    )}
-                    <span className="font-semibold text-[var(--color-text-primary)]">
-                      = 총 {formatAmount(order.totalAmount)}원
-                    </span>
+                        ) : null,
+                      )}
+                      <span className="font-semibold text-[var(--color-text-primary)]">
+                        = 총 {formatAmount(order.totalAmount)}원
+                      </span>
+                    </div>
+                    {!cancelled ? (
+                      <SaleMarginEstimateDisplay margin={order.marginEstimate} />
+                    ) : null}
                   </div>
                   {!cancelled ? (
                     <div className="flex flex-wrap items-center gap-2">

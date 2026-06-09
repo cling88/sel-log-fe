@@ -49,6 +49,8 @@ function lineToInput(line: IncomeDepositLine): IncomeDepositLineInput {
     vatAmount: line.vatAmount != null ? String(line.vatAmount) : "",
     commissionAmount:
       line.commissionAmount != null ? String(line.commissionAmount) : "",
+    orderNo: line.orderNo ?? "",
+    linkedSaleOrderId: line.linkedSaleOrderId ?? "",
     memo: line.memo,
     bankId: line.bankId ?? "",
   };
@@ -88,6 +90,8 @@ function parseForm(
       : undefined;
 
   const bankId = resolveBankId(form.bankId);
+  const orderNo = form.orderNo.trim();
+  const linkedSaleOrderId = form.linkedSaleOrderId.trim();
 
   return {
     depositDate,
@@ -95,6 +99,8 @@ function parseForm(
     amount,
     ...(vatAmount != null ? { vatAmount } : {}),
     ...(commissionAmount != null ? { commissionAmount } : {}),
+    ...(orderNo ? { orderNo } : {}),
+    ...(linkedSaleOrderId ? { linkedSaleOrderId } : {}),
     memo: form.memo.trim(),
     bankId,
     bank:
@@ -275,6 +281,27 @@ export function IncomeDepositRegisterDialog({
                   value={form.commissionAmount}
                   onChange={(e) => patch({ commissionAmount: e.target.value })}
                   placeholder="없으면 비워두세요"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="inc-order-no">주문번호</Label>
+                <Input
+                  id="inc-order-no"
+                  value={form.orderNo}
+                  onChange={(e) => patch({ orderNo: e.target.value })}
+                  placeholder="정산 대사용 (선택)"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="inc-linked-sale">연결 매출 ID</Label>
+                <Input
+                  id="inc-linked-sale"
+                  value={form.linkedSaleOrderId}
+                  onChange={(e) => patch({ linkedSaleOrderId: e.target.value })}
+                  placeholder="선택"
                 />
               </div>
             </div>

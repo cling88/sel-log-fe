@@ -538,9 +538,12 @@
       "orderNo": "SO-260604-01",
       "customerName": "김민수",
       "channelId": "ch-001",         // null 가능
-      "channel": {                   // 스냅샷, channelId 있을 때
+      "channel": {
         "id": "ch-001",
-        "name": "스마트스토어"
+        "name": "스마트스토어",
+        "platformFeeRate": 0.0636,
+        "storeName": "OO피규어",
+        "storeUrl": "https://smartstore.naver.com/oo-figure"
       },
       "items": [
         {
@@ -944,7 +947,9 @@
 
 ## 10. 판매채널
 
-> 화면: 매출 등록 — 채널 선택·관리
+> 화면: 매출 등록 — 채널 선택·관리 (`sale-channel-manage-dialog`)
+
+### 10-1. 현재 (FE 연동됨)
 
 | API | 설명 |
 |-----|------|
@@ -953,7 +958,113 @@
 | `PATCH /sales-channels/:id` | `{ name }` |
 | `DELETE /sales-channels/:id` | soft delete |
 
-매출 주문에는 `channelId` + `channel` 스냅샷 (`{ id, name }`).
+매출 주문: `channelId` + `channel` 스냅샷 (`{ id, name }`).
+
+---
+
+### 10-2. 확장 요청 (BE 구현 필요) — §14-10
+
+> **배경**: 채널마다 플랫폼 수수료가 다름(스마트스토어·쿠팡·G마켓 등). 부가세(10/110)는 채널과 무관 → **전역 설정**(`GET /settings`)에만 둠. **수수료는 채널별**로 관리.
+
+**필드 정의**
+
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| `name` | string | ✓ | 채널 라벨 — 매출 뱃지·선택 목록 (예: `스마트스토어`, `쿠팡`) |
+| `platformFeeRate` | number | ✓ | 추정 순익용 플랫폼 수수료율 (0~1). 예: `0.0636` = 6.36% |
+| `storeName` | string | — | 해당 채널 **내 상점명** (예: `OO피규어`). `name`과 구분 |
+| `storeUrl` | string | — | 스토어·셀러센터 URL (http/https) |
+
+**`GET /sales-channels` 응답 예시**
+
+```jsonc
+{
+  "data": [
+    {
+      "id": "ch-001",
+      "name": "스마트스토어",
+      "platformFeeRate": 0.0636,
+      "storeName": "OO피규어",
+      "storeUrl": "https://smartstore.naver.com/oo-figure",
+      "createdAtIso": "2026-01-01T00:00:00Z",
+      "updatedAtIso": "2026-06-04T12:00:00Z"
+    }
+  ]
+}
+```
+
+**`POST /sales-channels` / `PATCH /sales-channels/:id` body**
+
+```jsonc
+{
+  "name": "쿠팡",
+  "platformFeeRate": 0.108,
+  "storeName": "OO피규어",
+  "storeUrl": "https://www.coupang.com/..."
+}
+```
+
+**검증**
+
+- `name`: trim 후 비어 있으면 `400`
+- `platformFeeRate`: `0 <= rate <= 0.2` 권장 (20% 초과 시 경고 또는 상한 정의)
+- `storeUrl`: http/https URL 형식, 빈 문자열 → null
+- soft delete된 채널은 목록·선택에서 제외 (기존과 동일)
+
+**매출 주문 스냅샷 확장**
+
+등록·수정 시점 채널 정보를 스냅샷으로 저장 (채널 마스터 변경·삭제 후에도 주문 이력 유지).
+
+```jsonc
+// GET /sales 응답 — channel 스냅샷
+{
+  "channelId": "ch-001",
+  "channel": {
+    "id": "ch-001",
+    "name": "스마트스토어",
+    "platformFeeRate": 0.0636,
+    "storeName": "OO피규어",
+    "storeUrl": "https://smartstore.naver.com/oo-figure"
+  }
+}
+```
+
+> `SalesChannelSummary` 타입: `id`, `name`, `platformFeeRate`, `storeName?`, `storeUrl?`
+
+**추정 순익(`marginEstimate`) 연동**
+
+| 조건 | 수수료율 출처 |
+|------|----------------|
+| `channelId` 있고 채널에 `platformFeeRate` 있음 | 해당 채널 `platformFeeRate` |
+| `channelId` 없음 | `GET /settings` → `defaultPlatformFeeRate` (fallback, 선택) |
+| 둘 다 없음 | BE 기본값 `0.0636` (하드코딩 fallback, 문서화) |
+
+```jsonc
+// marginEstimate.assumptions 예시
+{
+  "vatNote": "포함가 × 10/110",
+  "platformFeeNote": "결제금액 × 6.36% (스마트스토어 · OO피규어)"
+}
+```
+
+- `estimatedPlatformFeeAmount` = `totalAmount × platformFeeRate` (주문 시점 스냅샷 rate 사용 권장)
+- `estimatedVatAmount` = `totalAmount × vatExtractRate` — **`GET /settings.vatExtractRate`** (채널 무관)
+
+**FE 연동 (BE 배포 후)**
+
+- 채널 관리 모달: 등록·수정 폼에 수수료(% 입력 → 소수 저장), 상점명, URL
+- 목록: `name · 6.36%` 요약 표시, `storeUrl` 있으면 링크 아이콘
+- §14-2 설정: 전역 `platformFeeRate` **제거** → 채널별로 이전
+
+**마이그레이션 (기존 데이터)**
+
+- 기존 `name`만 있는 채널 → `platformFeeRate: 0.0636` 기본값 backfill
+- `storeName`, `storeUrl` → null
+
+**추후 (P3, 지금 불필요)**
+
+- `code`: `smartstore` \| `coupang` \| … (API 연동용)
+- `externalStoreId`: 플랫폼 측 상점 ID
 
 ---
 
@@ -1044,7 +1155,7 @@
 | `source` (stockHistory) | `"purchase"` \| `"sale"` \| `"manual_adjust"` | |
 | `source` (priceHistory) | `"product_register"` \| `"manual_edit"` \| `"purchase"` | |
 | `channelId` | `string?` | 매출 판매채널 FK |
-| `channel` | `{ id, name }?` | 등록 시점 스냅샷 |
+| `channel` | `SalesChannelSummary?` | 등록 시점 스냅샷 (`id`, `name`, `platformFeeRate`, `storeName?`, `storeUrl?`) |
 | `bankId` | `string?` | 매입·수익 라인 출금/입금 계좌 FK |
 | `bank` | `BankSummary?` | 계좌 스냅샷 |
 
@@ -1057,15 +1168,494 @@
 | 정산 추이 | `GET /ledger/summary?period=` | ✅ |
 | 월 탭 범위 | `GET /ledger/earliest-month` | ✅ |
 | 매입 3종 | `/purchase/*` | ✅ |
-| 매출 | `/sales`, `/sales-channels` | ✅ |
+| 구매처 | `/vendors` | ✅ |
+| 매출·순익 추정 | `/sales`, `/sales/estimate-margin` | ✅ |
+| 판매채널 | `/sales-channels` | ✅ (name만) / ❌ (§10-2 확장) |
 | 수익 | `/income`, `/banks` | ✅ |
 | 상품·카테고리·이력 | `/products`, `/categories`, `*-history` | ✅ |
 | 이미지 업로드 | `POST /upload` | ✅ |
+| 엑셀 | `GET /export/*` | ✅ (BE 미배포 시 에러) |
 | 인증 | `POST /auth/login`, `/auth/refresh` | ✅ |
 | 전역 검색 | `GET /ledger/search` | ❌ (시드+localStorage) |
-| 엑셀 | `GET /report/export` 등 | ❌ (2차) |
-| 설정(마진·수수료) | 미정의 | ❌ (2차) |
+| 대시보드 | 미정의 | ❌ (빈 화면) |
+| 설정(마진·수수료) | 미정의 | ❌ (빈 화면) |
+| 월말 점검·대사 | 미정의 | ❌ |
+| 주문번호 중복 검사 | 미정의 | ❌ |
 
 ---
 
-*v2 — FE API 연동 기준 갱신 (2026-06-08)*
+## 13. 문서 보완 — 이미 FE 연동 중 (BE 구현·문서화 필요)
+
+> 아래는 **기존 가이드에 누락**되었으나 FE가 이미 호출하는 API입니다. BE 구현 시 이 절을 기준으로 맞춰 주세요.
+
+### 13-1. 구매처
+
+> 화면: 상품매입 등록·수정, 구매처 관리 모달
+
+| API | 설명 |
+|-----|------|
+| `GET /vendors` | 목록 (soft delete 제외) |
+| `POST /vendors` | `{ name, link? }` |
+| `PATCH /vendors/:id` | 동일 필드 수정 |
+| `DELETE /vendors/:id` | soft delete |
+
+매입 라인 body·응답: `vendorId` (필수 권장) + `vendorSnapshot` (`{ id, name, link }`).
+
+상품매입 목록은 **결제일 → 구매처** 2단 그룹:
+
+```jsonc
+// GET /purchase/products 응답 그룹 (paymentDate 단위)
+{
+  "paymentDate": "2026-06-04",
+  "groupMeta": { "groupName": "...", "extraFees": [], "discounts": [], "orderCancelled": false },
+  "vendorGroups": [
+    {
+      "vendorId": "ven-001",
+      "vendorSnapshot": { "id": "ven-001", "name": "도매몰A", "link": "" },
+      "extraFees": [{ "id": "adj-1", "label": "배송비", "amount": 3500 }],
+      "discounts": [],
+      "orderCancelled": false,
+      "lines": [ /* ProductPurchaseLine[] */ ],
+      "totals": {
+        "linesTotal": 150000,
+        "extraFeesTotal": 3500,
+        "discountsTotal": 0,
+        "subtotal": 153500
+      }
+    }
+  ],
+  "totals": { "linesTotal": 150000, "extraFeesTotal": 3500, "discountsTotal": 0, "subtotal": 153500 }
+}
+```
+
+| API | 설명 |
+|-----|------|
+| `PATCH /purchase/groups/vendor` | `{ paymentDate, vendorId, extraFees?, discounts? }` |
+| `PATCH /purchase/groups/vendor/cancel` | `{ paymentDate, vendorId, orderCancelled }` |
+
+---
+
+### 13-2. 매출 추정 순익 (`marginEstimate`)
+
+> 화면: 매출 목록·등록/수정 모달 하단
+
+**목록·등록·수정 응답** (`GET/POST/PATCH /sales`)에 주문별 `marginEstimate` 포함.  
+`status: "cancelled"` → `marginEstimate: null`.
+
+```jsonc
+{
+  "marginEstimate": {
+    "estimatedCostTotal": 30000,
+    "estimatedGrossProfit": 22000,
+    "estimatedVatAmount": 4727,
+    "estimatedPlatformFeeAmount": 3308,
+    "estimatedNetProfit": 13965,
+    "hasUnknownCost": false,
+    "assumptions": {
+      "vatNote": "포함가 × 10/110",
+      "platformFeeNote": "결제금액 × 6.36% (스마트스토어 · OO피규어)"
+    }
+  }
+}
+```
+
+| 필드 | 계산 |
+|------|------|
+| `estimatedGrossProfit` | `totalAmount - estimatedCostTotal` |
+| `estimatedVatAmount` | 포함가 기준 `× 10/110` |
+| `estimatedPlatformFeeAmount` | `totalAmount × platformFeeRate` — **주문 `channel` 스냅샷** 또는 §10-2 fallback |
+| `estimatedNetProfit` | gross − VAT − 수수료 |
+| `hasUnknownCost` | 품목 원가(매입 단가) 미확인 시 `true` |
+
+**미리보기**: `POST /sales/estimate-margin` — 등록 body와 동일. body의 `channelId`로 수수료율 조회.
+
+> 부가세: `GET /settings` → `vatExtractRate` (채널 무관). 수수료: §10-2 채널별 `platformFeeRate`.
+
+---
+
+### 13-3. 엑셀 다운로드
+
+> 화면: 장부 각 탭 월 선택 행 우측
+
+| API | 쿼리 | 파일 |
+|-----|------|------|
+| `GET /export/purchase` | `year=2026` 또는 `month=2026-06` | `매입_2026.xlsx` / `매입_2026-06.xlsx` |
+| `GET /export/sales` | 동일 | `매출_*.xlsx` |
+| `GET /export/income` | 동일 | `수익_*.xlsx` |
+| `GET /export/products` | `scope=all` \| `active` | `상품목록_전체.xlsx` / `상품목록_활성.xlsx` |
+
+- 응답: `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` (JSON 래핑 없음)
+- `Content-Disposition: attachment; filename*=UTF-8''...`
+- 해당 기간 데이터 없음 → `404` + `{ error: { code: "NOT_FOUND" } }`
+
+---
+
+## 14. 기능 추가 요청 (2026-06)
+
+> **배경**: 1인 셀러, 세금 신고·장부 정리, 실제 판매 상태 점검이 목적. 스마트스토어 API는 추후 연동 예정(현재 없음).  
+> **우선순위**: P0(즉시) → P1(월말·정산) → P2(편의) → P3(API 연동 준비)
+
+### 우선순위 요약
+
+| 순위 | 기능 | 화면 | 신규·확장 API |
+|------|------|------|----------------|
+| **P0** | 대시보드 | `/dashboard` | `GET /dashboard/overview` |
+| **P0** | 판매채널 확장 | 매출 채널 관리 | `POST/PATCH /sales-channels` 필드 확장 (§10-2) |
+| **P0** | 마진·부가세 설정 | `/settings` | `GET /settings`, `PATCH /settings` |
+| **P1** | 월말 점검 체크리스트 | 대시보드 또는 장부 | `GET /ledger/monthly-review` |
+| **P1** | 매출 ↔ 수익 대사 | 장부·대시보드 | `GET /reconciliation/sale-income` + 수익 필드 확장 |
+| **P2** | 장부·엑셀 합계 교차검증 | 대시보드 | `GET /ledger/monthly-totals` (또는 monthly-review에 포함) |
+| **P2** | 상품 재고 상태 필터 | 상품관리 | `GET /products?stockStatus=` |
+| **P2** | 주문번호 중복 검사 | 매출 등록 모달 | `GET /sales/check-order-no` |
+| **P3** | 스마트스토어 연동 준비 | — | 스키마·제약 (아래 §14-8) |
+
+---
+
+### 14-1. [P0] 대시보드 집계 — `GET /dashboard/overview`
+
+**목적**: “이번 달 잘 팔고 있나?” + 세금·정산 전 한눈에 확인.
+
+| 파라미터 | 필수 | 값 |
+|----------|------|-----|
+| `month` | 선택 | `YYYY-MM` (기본: 오늘 기준 이번 달) |
+
+**응답**
+
+```jsonc
+{
+  "data": {
+    "month": "2026-06",
+    "compareMonth": "2026-05",       // 전월 (데이터 없으면 null)
+    "purchase": {
+      "total": 232500,               // 상품매입+부가 (기타지출 제외)
+      "count": 4,
+      "prevTotal": 200000,
+      "changePercent": 16.25         // 전월 대비 %, prev 없으면 null
+    },
+    "sale": {
+      "normalTotal": 120000,
+      "normalCount": 5,
+      "prevTotal": 126000,
+      "changePercent": -4.76,
+      "estimatedNetProfitTotal": 45000  // 해당 월 정상 주문 marginEstimate.estimatedNetProfit 합
+    },
+    "income": {
+      "total": 115000,
+      "count": 3,
+      "prevTotal": 100000,
+      "changePercent": 15
+    },
+    "alerts": {
+      "purchaseStockPendingCount": 3,  // stockReflected=false 상품매입 라인 수
+      "saleUnknownCostCount": 1,       // hasUnknownCost=true 정상 주문 수
+      "outOfStockCount": 2,            // active && stock<=0
+      "lowStockCount": 5               // active && 0<stock<=safetyStock
+    },
+    "today": {
+      "purchaseTotal": 0,              // 오늘 결제일 매입(상품+부가)
+      "saleTotal": 35000,                // 오늘 정상 매출 totalAmount 합
+      "incomeTotal": 0,                  // 오늘 입금 amount 합
+      "stockDelta": -3                   // 오늘 재고 변동 합 (매출차감+매입반영, 정수)
+    },
+    "cumulative": {
+      "otherExpenseTotal": 660000,     // 기타지출 전체 누적 (period 무관)
+      "netTotal": -545000              // income(이번달) - otherExpense(누적), ledger/summary와 동일 규칙
+    }
+  }
+}
+```
+
+**BE 참고**
+
+- `GET /ledger/summary`와 날짜·집계 규칙을 **동일**하게 유지 (매입 `payment_date`, 매출 `order_date`+`normal`, 수익 `deposit_date`).
+- `estimatedNetProfitTotal`: 취소 주문 제외, `marginEstimate` 없으면 0 처리.
+
+---
+
+### 14-2. [P0] 사용자 설정 — `GET /settings`, `PATCH /settings`
+
+**목적**: 추천 판매가 마진·부가세 환산율 등 **채널과 무관한 전역값** 관리.  
+플랫폼 수수료는 **§10-2 판매채널 `platformFeeRate`** 에서 채널별 관리.
+
+**단일 사용자**: 계정당 설정 1행 (JWT `userId` 기준).
+
+**`GET /settings` 응답 / `PATCH /settings` body**
+
+```jsonc
+{
+  "marginMinRate": 0.15,              // 추천 판매가 하한 (0~1)
+  "marginMaxRate": 0.50,              // 추천 판매가 상한
+  "vatExtractRate": 0.0909090909,     // 부가세 환산 (10/110). 채널 무관
+  "defaultPlatformFeeRate": 0.0636,   // 선택: channelId 없을 때 marginEstimate fallback
+  "defaultChannelId": "ch-001"        // 매출 등록 기본 채널, null 가능
+}
+```
+
+**검증**
+
+- `marginMinRate` ≤ `marginMaxRate`
+- rate 필드: 0 이상 1 이하 (`defaultPlatformFeeRate`는 0~0.2 권장)
+
+**연동 범위**
+
+| 기능 | 반영 |
+|------|------|
+| `marginEstimate` — VAT | `vatExtractRate` |
+| `marginEstimate` — 수수료 | 주문 `channel.platformFeeRate` → 없으면 `defaultPlatformFeeRate` |
+| 매입 추천판매가 | `marginMinRate`, `marginMaxRate` |
+| 매출 등록 모달 | `defaultChannelId` |
+
+---
+
+### 14-3. [P1] 월말 점검 — `GET /ledger/monthly-review`
+
+**목적**: 세금·정산 전 “빠진 것” 체크리스트.
+
+| 파라미터 | 필수 | 값 |
+|----------|------|-----|
+| `month` | **필수** | `YYYY-MM` |
+
+**응답**
+
+```jsonc
+{
+  "data": {
+    "month": "2026-06",
+    "checks": [
+      {
+        "id": "purchase_stock_pending",
+        "label": "재고 미반영 매입",
+        "status": "warning",           // ok | warning | error
+        "count": 3,
+        "detailUrl": "/ledger?tab=purchase&purchaseSub=product&month=2026-06"
+      },
+      {
+        "id": "sale_unknown_cost",
+        "label": "원가 미확인 매출",
+        "status": "warning",
+        "count": 1
+      },
+      {
+        "id": "sale_income_gap",
+        "label": "매출·입금 금액 차이",
+        "status": "warning",
+        "saleTotal": 120000,
+        "incomeTotal": 115000,
+        "diff": 5000
+      },
+      {
+        "id": "cancelled_orders",
+        "label": "취소 처리된 주문",
+        "status": "ok",
+        "count": 2
+      }
+    ],
+    "items": {
+      "purchaseStockPending": [
+        { "id": "pp-001", "paymentDate": "2026-06-04", "productName": "...", "vendor": "도매몰A" }
+      ],
+      "saleUnknownCost": [
+        { "id": "so-002", "orderNo": "NV-...", "orderDate": "2026-06-03", "totalAmount": 32000 }
+      ]
+    }
+  }
+}
+```
+
+**판정 기준**
+
+| check id | warning 조건 |
+|----------|----------------|
+| `purchase_stock_pending` | 해당 월 결제일 + `stockReflected=false` 라인 1건 이상 |
+| `sale_unknown_cost` | 해당 월 `status=normal` + `marginEstimate.hasUnknownCost=true` |
+| `sale_income_gap` | `|sale.normalTotal - income.total| > 0` (동월, 기타지출 미포함) |
+
+---
+
+### 14-4. [P1] 매출 ↔ 수익 대사 — `GET /reconciliation/sale-income`
+
+**목적**: 스마트스토어 API 전에도 “매출은 있는데 입금 없음 / 입금만 있음” 수동 점검.
+
+| 파라미터 | 필수 | 값 |
+|----------|------|-----|
+| `month` | **필수** | `YYYY-MM` |
+| `channelId` | 선택 | 특정 채널만 |
+
+**수익 라인 필드 확장 (선행)**
+
+`income` 등록·수정 body / 응답에 선택 필드 추가:
+
+```jsonc
+{
+  "orderNo": "NV-260604-12345",    // 스마트스토어 주문번호 등 (대사 키)
+  "linkedSaleOrderId": "so-001"    // 명시 연결 시 (선택)
+}
+```
+
+**매칭 규칙 (우선순위)**
+
+1. `linkedSaleOrderId` 일치
+2. 없으면 동월 `orderNo` 문자열 일치 (매출 `orderNo` ↔ 수익 `orderNo`)
+3. 미매칭 → 각각 “미연결” 목록에 포함
+
+**응답**
+
+```jsonc
+{
+  "data": {
+    "month": "2026-06",
+    "summary": {
+      "saleTotal": 120000,
+      "incomeTotal": 115000,
+      "matchedCount": 4,
+      "saleOnlyCount": 1,
+      "incomeOnlyCount": 0
+    },
+    "saleOnly": [
+      { "id": "so-003", "orderNo": "NV-...", "orderDate": "2026-06-10", "totalAmount": 5000, "channel": "스마트스토어" }
+    ],
+    "incomeOnly": [
+      { "id": "inc-002", "depositDate": "2026-06-12", "itemName": "네이버 정산", "amount": 3000, "orderNo": null }
+    ],
+    "matched": [
+      { "saleOrderId": "so-001", "incomeLineId": "inc-001", "orderNo": "NV-...", "saleAmount": 52000, "incomeAmount": 48000, "diff": 4000 }
+    ]
+  }
+}
+```
+
+---
+
+### 14-5. [P2] 월별 합계 교차검증 — `GET /ledger/monthly-totals`
+
+**목적**: 장부 화면·엑셀 export 숫자가 같은지 신고 전 자가 검증.  
+(§14-3 `sale_income_gap`과 중복 가능 → **monthly-review에 통합해도 무방**.)
+
+| 파라미터 | 필수 | 값 |
+|----------|------|-----|
+| `month` | **필수** | `YYYY-MM` |
+
+**응답** — `GET /export/*` 집계와 **동일 규칙**이어야 함.
+
+```jsonc
+{
+  "data": {
+    "month": "2026-06",
+    "purchase": {
+      "productTotal": 192500,
+      "supplyTotal": 40000,
+      "otherTotal": 0,
+      "grandTotal": 232500
+    },
+    "sale": {
+      "normalTotal": 120000,
+      "normalCount": 5,
+      "cancelledCount": 1
+    },
+    "income": {
+      "total": 115000,
+      "vatTotal": 10000,
+      "commissionTotal": 5000,
+      "count": 3
+    }
+  }
+}
+```
+
+---
+
+### 14-6. [P2] 상품 재고 상태 필터 — `GET /products` 확장
+
+**목적**: 품절·품절임박만 보고 판매 중 SKU 관리.
+
+| 쿼리 | 설명 |
+|------|------|
+| `stockStatus` | `out_of_stock` \| `low_stock` \| `in_stock` (복수 comma 구분 가능) |
+
+**판정** (`active=true` 기준)
+
+| 값 | 조건 |
+|----|------|
+| `out_of_stock` | `stock <= 0` |
+| `low_stock` | `stock > 0 && stock <= safetyStock` |
+| `in_stock` | `stock > safetyStock` |
+
+기존 `active`, `q`, `page`, `limit`와 조합.
+
+---
+
+### 14-7. [P2] 주문번호 중복 검사 — `GET /sales/check-order-no`
+
+**목적**: 수동 입력 시 동일 주문 이중 등록 방지 (API 연동 전).
+
+| 파라미터 | 필수 | 설명 |
+|----------|------|------|
+| `orderNo` | **필수** | 검사할 주문번호 (trim, 대소문자 무시 권장) |
+| `excludeId` | 선택 | 수정 모달 시 자기 주문 제외 |
+
+**응답**
+
+```jsonc
+{
+  "data": {
+    "exists": true,
+    "order": {
+      "id": "so-001",
+      "orderNo": "NV-260604-12345",
+      "orderDate": "2026-06-04",
+      "status": "normal"
+    }
+  }
+}
+```
+
+**등록·수정 시 서버 검증 (권장)**
+
+- `POST /sales`, `PATCH /sales/:id`에서 동일 `orderNo` 존재 시 `409 Conflict`  
+  (`error.code`: `DUPLICATE_ORDER_NO`)
+
+---
+
+### 14-10. [P0] 판매채널 필드 확장
+
+> **상세 스펙**: §10-2. FE는 `name`만 연동 중 → BE 배포 후 관리 모달·타입 확장.
+
+**요청 요약**
+
+| 항목 | 내용 |
+|------|------|
+| API | `GET/POST/PATCH /sales-channels` — `platformFeeRate`, `storeName`, `storeUrl` 추가 |
+| 스냅샷 | `GET /sales` 등 `channel` 객체에 동일 필드 포함 |
+| 순익 | `marginEstimate` 수수료 = 채널 `platformFeeRate` (§13-2) |
+| 부가세 | 전역 `settings.vatExtractRate` — 채널 필드 **없음** |
+| 마이그레이션 | 기존 채널 `platformFeeRate` → `0.0636` backfill |
+
+**우선순위**: 대시보드·설정과 동급 P0 (순익 추정 정확도에 직결).
+
+---
+
+### 14-8. [P3] 스마트스토어 API 연동 준비 (스키마만)
+
+> 지금 구현 불필요. 연동 전 데이터·제약만 맞춰 두면 됨.
+
+| 항목 | 권장 |
+|------|------|
+| `sale_orders.order_no` | UNIQUE (삭제·취소 주문 제외 시 partial unique) |
+| `sale_orders` | `externalOrderId`, `externalSource` (`smartstore`) nullable 컬럼 예약 |
+| `income_lines.order_no` | §14-4 대사용 |
+| 판매채널 | `sales_channels` — §10-2 `storeUrl`, `code`(`smartstore`) nullable (§10-2 P3) |
+| 동기화 | 추후 `POST /integrations/smartstore/sync` 등 별도 스펙 |
+
+---
+
+### 14-9. 기존 API 보완 (선택)
+
+| API | 보완 내용 |
+|-----|-----------|
+| `GET /ledger/search` | §2 스펙대로 서버 검색 (FE 전역 검색 연동 대기) |
+| `GET /ledger/summary` | `period=month` 시 전월 대비 `changePercent` meta 추가 (dashboard와 중복 시 dashboard만 구현해도 됨) |
+| `GET /products` | 응답 meta에 `outOfStockCount`, `lowStockCount` (대시보드 alerts와 공유) |
+
+---
+
+*v3.1 — 판매채널 필드 확장 요청 추가 (2026-06-04)*

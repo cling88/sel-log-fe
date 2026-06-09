@@ -46,7 +46,7 @@ export interface InventoryProduct extends ProductChangeTags {
 
   stock: number; // 현재 재고
   safetyStock: number; // 안전재고
-  currentPrice: number; // 현재 기본 판매가
+  currentPrice: number; // 현재 판매가
 
   createdAtIso: string;
   updatedAtIso: string;

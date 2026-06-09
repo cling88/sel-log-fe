@@ -36,6 +36,8 @@ export type IncomeLinePayload = {
   bankId?: string;
   vatAmount?: number;
   commissionAmount?: number;
+  orderNo?: string;
+  linkedSaleOrderId?: string;
   memo?: string;
 };
 
@@ -91,6 +93,8 @@ export function normalizeIncomeLine(raw: unknown): IncomeDepositLine {
     amount: Math.max(0, Math.trunc(Number(row.amount) || 0)),
     ...(vatAmount != null ? { vatAmount } : {}),
     ...(commissionAmount != null ? { commissionAmount } : {}),
+    orderNo: normalizeOptionalString(row.orderNo) || null,
+    linkedSaleOrderId: normalizeOptionalString(row.linkedSaleOrderId) || null,
     memo: normalizeOptionalString(row.memo),
     bankId: normalizeBankId(row),
     bank: normalizeBankSummary(row.bank),
@@ -163,6 +167,8 @@ export function toIncomeLinePayload(
     line.commissionAmount != null
       ? Math.max(0, Math.trunc(line.commissionAmount))
       : undefined;
+  const orderNo = line.orderNo?.trim();
+  const linkedSaleOrderId = line.linkedSaleOrderId?.trim();
 
   return {
     depositDate: line.depositDate.trim(),
@@ -171,6 +177,8 @@ export function toIncomeLinePayload(
     ...(bankId ? { bankId } : {}),
     ...(vatAmount != null ? { vatAmount } : {}),
     ...(commissionAmount != null ? { commissionAmount } : {}),
+    ...(orderNo ? { orderNo } : {}),
+    ...(linkedSaleOrderId ? { linkedSaleOrderId } : {}),
     memo: line.memo?.trim() || "",
   };
 }

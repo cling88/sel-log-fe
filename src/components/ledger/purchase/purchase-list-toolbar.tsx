@@ -14,7 +14,6 @@ interface PurchaseListToolbarProps {
   /** type=search X(지우기) 클릭 시 — 전체 목록 등 빈 검색 조회 */
   onSearchClear?: () => void;
   searchPlaceholder?: string;
-  showExcelActions?: boolean;
   registerLabel?: string;
   onRegister?: () => void;
   /** 목록 카드 상단에 붙일 때 true */
@@ -28,7 +27,6 @@ export function PurchaseListToolbar({
   onSearchSubmit,
   onSearchClear,
   searchPlaceholder = "그룹명, 항목명, 구매처 검색",
-  showExcelActions = false,
   registerLabel,
   onRegister,
   embedded = false,
@@ -84,40 +82,6 @@ export function PurchaseListToolbar({
         ) : null}
       </div>
       <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:shrink-0 sm:justify-end">
-        {showExcelActions ? (
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled
-              title="퍼블"
-              className="h-8 border-[var(--color-border)] bg-white text-xs shadow-none"
-            >
-              샘플다운로드
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled
-              title="퍼블"
-              className="h-8 border-[var(--color-border)] bg-white text-xs shadow-none"
-            >
-              엑셀업로드
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled
-              title="퍼블"
-              className="h-8 border-[var(--color-border)] bg-white text-xs shadow-none"
-            >
-              엑셀다운로드
-            </Button>
-          </div>
-        ) : null}
         {registerLabel && onRegister ? (
           <Button
             type="button"

@@ -25,6 +25,7 @@ import {
 } from "@/lib/api/products";
 import { toYearMonthParam } from "@/lib/ledger-period";
 import type { ProductHistoryFilterId } from "@/lib/product-unified-history";
+import type { ProductStockStatus } from "@/types/dashboard";
 import type { InventoryProduct, InventoryProductInput } from "@/types/inventory-product";
 
 export const PRODUCTS_QUERY_KEY = ["products"] as const;
@@ -35,8 +36,18 @@ function getErrorMessage(error: unknown): string {
   return "요청에 실패했습니다.";
 }
 
-export function productsListQueryKey(q?: string, page = 1) {
-  return [...PRODUCTS_QUERY_KEY, "list", q?.trim() ?? "", page] as const;
+export function productsListQueryKey(
+  q?: string,
+  page = 1,
+  stockStatus?: ProductStockStatus | null,
+) {
+  return [
+    ...PRODUCTS_QUERY_KEY,
+    "list",
+    q?.trim() ?? "",
+    page,
+    stockStatus ?? "",
+  ] as const;
 }
 
 export function productDetailQueryKey(id: string | null) {
@@ -72,15 +83,17 @@ function invalidateProductHistoryQueries(
 export function useProductsList(
   searchQuery?: string,
   page = 1,
-  options?: { enabled?: boolean },
+  options?: { enabled?: boolean; stockStatus?: ProductStockStatus | null },
 ) {
   const q = searchQuery?.trim() ?? "";
   const safePage = Math.max(1, page);
+  const stockStatus = options?.stockStatus ?? null;
   return useQuery({
-    queryKey: productsListQueryKey(q, safePage),
+    queryKey: productsListQueryKey(q, safePage, stockStatus),
     queryFn: async () => {
       const result = await fetchProducts({
         ...(q ? { q } : {}),
+        ...(stockStatus ? { stockStatus } : {}),
         page: safePage,
         limit: PRODUCTS_LIST_PAGE_SIZE,
       });

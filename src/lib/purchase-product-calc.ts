@@ -45,15 +45,24 @@ export function calcRecommendedPrice(unitPrice: number, margin: number): number 
   return Math.round(unitPrice / (1 - margin));
 }
 
+export type MarginRateRange = {
+  min: number;
+  max: number;
+};
+
 export function formatRecommendedPriceRange(
   unitPrice: number,
   finalUnitPrice: number,
+  margins: MarginRateRange = {
+    min: PUB_MARGIN_MIN,
+    max: PUB_MARGIN_MAX,
+  },
 ): string {
   const prices = [
-    calcRecommendedPrice(unitPrice, PUB_MARGIN_MIN),
-    calcRecommendedPrice(unitPrice, PUB_MARGIN_MAX),
-    calcRecommendedPrice(finalUnitPrice, PUB_MARGIN_MIN),
-    calcRecommendedPrice(finalUnitPrice, PUB_MARGIN_MAX),
+    calcRecommendedPrice(unitPrice, margins.min),
+    calcRecommendedPrice(unitPrice, margins.max),
+    calcRecommendedPrice(finalUnitPrice, margins.min),
+    calcRecommendedPrice(finalUnitPrice, margins.max),
   ].filter((p) => p > 0);
   if (prices.length === 0) return "—";
   const min = Math.min(...prices);
