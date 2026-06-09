@@ -692,12 +692,9 @@ export function ProductsTabPanel() {
                                 {p.stock}
                               </span>
                               {" · 판매가 "}
-                              <AmendedAmount
-                                current={p.currentPrice ?? 0}
-                                previous={p.previousPrice}
-                                className="inline-flex"
-                                currentClassName="font-medium text-[var(--color-text-primary)]"
-                              />
+                              <span className="tabular-nums font-medium text-[var(--color-text-primary)]">
+                                {formatAmount(p.currentPrice ?? 0)}원
+                              </span>
                             </p>
                           </div>
                         </div>
@@ -858,12 +855,9 @@ export function ProductsTabPanel() {
                 </div>
                 <div className="rounded-xl border border-[var(--color-border)] bg-white p-3">
                   <p className="text-xs text-[var(--color-text-secondary)]">판매가</p>
-                  <AmendedAmount
-                    current={selectedProduct.currentPrice ?? 0}
-                    previous={selectedProduct.previousPrice}
-                    className="mt-1 text-lg"
-                    currentClassName="font-semibold"
-                  />
+                  <p className="mt-1 text-lg font-semibold tabular-nums">
+                    {formatAmount(selectedProduct.currentPrice ?? 0)}원
+                  </p>
                 </div>
               </div>
 

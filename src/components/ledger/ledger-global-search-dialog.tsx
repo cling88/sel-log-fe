@@ -1,8 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { replaceLedgerQuery } from "@/lib/ledger-url";
+import {
+  fetchLedgerSearch,
+  getLedgerSearchErrorMessage,
+  LEDGER_SEARCH_QUERY_KEY,
+} from "@/lib/api/ledger-search";
 import { MODAL_DIALOG_FOOTER_CLASS } from "@/components/common/modal-footer-classes";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +20,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { searchLedgerGlobally } from "@/lib/ledger-global-search";
 import { toYearMonthParam } from "@/lib/ledger-period";
 import type { LedgerGlobalSearchResult } from "@/types/ledger-global-search";
 import { cn } from "@/lib/utils";
@@ -58,12 +63,25 @@ export function LedgerGlobalSearchDialog({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
+  const [committedQ, setCommittedQ] = useState("");
 
-  const results = useMemo(() => searchLedgerGlobally(query), [query]);
-  const trimmed = query.trim();
+  const { data, isFetching, isError, error } = useQuery({
+    queryKey: [...LEDGER_SEARCH_QUERY_KEY, committedQ],
+    queryFn: () => fetchLedgerSearch(committedQ),
+    enabled: open && committedQ.length > 0,
+    staleTime: 30_000,
+  });
+
+  const results = data?.items ?? [];
+  const errorMessage = isError ? getLedgerSearchErrorMessage(error) : null;
+
+  const submitSearch = () => {
+    const trimmed = query.trim();
+    setCommittedQ(trimmed);
+  };
 
   const handleSelect = (result: LedgerGlobalSearchResult) => {
-    navigateToSearchResult(router, pathname, searchParams, result, trimmed);
+    navigateToSearchResult(router, pathname, searchParams, result, committedQ);
     onOpenChange(false);
   };
 
@@ -72,7 +90,10 @@ export function LedgerGlobalSearchDialog({
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
-        if (!next) setQuery("");
+        if (!next) {
+          setQuery("");
+          setCommittedQ("");
+        }
       }}
     >
       <DialogContent
@@ -95,16 +116,30 @@ export function LedgerGlobalSearchDialog({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="상품명, 주문번호, 항목명, SKU 등"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submitSearch();
+                }
+              }}
+              placeholder="상품명, 주문번호, 항목명, SKU 등 (Enter로 검색)"
               className="h-10 pl-9"
             />
           </div>
         </div>
 
         <div className="max-h-80 overflow-y-auto px-2 py-2">
-          {!trimmed ? (
+          {!committedQ ? (
             <p className="px-3 py-8 text-center text-sm text-[var(--color-text-muted)]">
-              검색어를 입력하세요.
+              검색어를 입력한 뒤 Enter를 눌러 검색하세요.
+            </p>
+          ) : errorMessage ? (
+            <p className="px-3 py-8 text-center text-sm text-red-600">
+              {errorMessage}
+            </p>
+          ) : isFetching ? (
+            <p className="px-3 py-8 text-center text-sm text-[var(--color-text-muted)]">
+              검색 중...
             </p>
           ) : results.length === 0 ? (
             <p className="px-3 py-8 text-center text-sm text-[var(--color-text-muted)]">
