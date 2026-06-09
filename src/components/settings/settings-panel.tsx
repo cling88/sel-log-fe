@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +38,14 @@ export function SettingsPanel() {
   const [defaultFeePercent, setDefaultFeePercent] = useState("");
   const [defaultChannelId, setDefaultChannelId] = useState<string>("none");
   const [saved, setSaved] = useState(false);
+
+  const defaultChannelItems = useMemo(
+    () => [
+      { label: "선택 안 함", value: "none" },
+      ...channels.map((ch) => ({ label: ch.name, value: ch.id })),
+    ],
+    [channels],
+  );
 
   useEffect(() => {
     setMarginMinPercent(percentToInput(settings.marginMinRate));
@@ -178,6 +186,7 @@ export function SettingsPanel() {
           <Select
             value={defaultChannelId}
             onValueChange={(value) => setDefaultChannelId(value ?? "none")}
+            items={defaultChannelItems}
             disabled={channelsLoading}
           >
             <SelectTrigger>
