@@ -25,6 +25,9 @@ import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { useUploadImage } from "@/hooks/use-upload-image";
 import { REGISTER_MODAL_FOOTER_CLASS } from "@/components/ledger/purchase/ledger-register-dialog-classes";
 import { PurchaseBankSelectField } from "@/components/ledger/purchase/purchase-bank-select-field";
+import { PurchaseVendorSelectField } from "@/components/ledger/purchase/purchase-vendor-select-field";
+import { useVendors } from "@/hooks/use-vendors";
+import type { VendorSummary } from "@/types/vendor";
 import { Plus, X } from "lucide-react";
 
 interface ProductPurchaseRegisterDialogProps {
@@ -53,7 +56,7 @@ function lineToInput(line: ProductPurchaseLine): ProductPurchaseLineInput {
     imageUrl: line.imageUrl,
     productName: line.productName,
     productLink: line.productLink,
-    vendor: line.vendor,
+    vendorId: line.vendorId ?? "",
     quantity: String(line.quantity),
     paymentAmount: String(line.paymentAmount),
     memo: line.memo,
@@ -83,18 +86,32 @@ function resolveBankId(raw: string): string | null {
   return trimmed || null;
 }
 
+function resolveVendorId(raw: string): string | null {
+  const trimmed = raw.trim();
+  return trimmed || null;
+}
+
 function parseForm(
   form: ProductPurchaseLineInput,
+  selectedVendor: VendorSummary | null,
   editLine?: ProductPurchaseLine | null,
 ): Omit<ProductPurchaseLine, "id" | "stockReflected"> | null {
   const productName = form.productName.trim();
-  const vendor = form.vendor.trim();
   const paymentDate = form.paymentDate.trim();
   const productLink = form.productLink.trim();
   const quantity = Math.trunc(Number(form.quantity));
   const paymentAmount = Math.trunc(Number(form.paymentAmount));
+  const vendorId = resolveVendorId(form.vendorId);
 
-  if (!paymentDate || !productName || !vendor || quantity <= 0 || paymentAmount < 0) {
+  if (
+    !paymentDate ||
+    !productName ||
+    !vendorId ||
+    !selectedVendor ||
+    selectedVendor.id !== vendorId ||
+    quantity <= 0 ||
+    paymentAmount < 0
+  ) {
     return null;
   }
   if (productLink && !isHttpUrl(productLink)) {
@@ -109,7 +126,9 @@ function parseForm(
     imageUrl: form.imageUrl.trim(),
     productName,
     productLink,
-    vendor,
+    vendor: selectedVendor.name,
+    vendorId,
+    vendorSnapshot: selectedVendor,
     quantity,
     paymentAmount,
     memo: form.memo.trim(),
@@ -133,6 +152,7 @@ export function ProductPurchaseRegisterDialog({
   deleteDisabledReason,
 }: ProductPurchaseRegisterDialogProps) {
   const { alert } = useAppDialog();
+  const { vendors } = useVendors();
   const uploadImage = useUploadImage();
   const isEdit = editLine != null;
   const readOnly = Boolean(editLine?.stockReflected);
@@ -234,7 +254,12 @@ export function ProductPurchaseRegisterDialog({
       return;
     }
 
-    const parsed = parseForm(form, editLine);
+    const vendorId = resolveVendorId(form.vendorId);
+    const selectedVendor =
+      vendorId != null
+        ? vendors.find((v) => v.id === vendorId) ?? null
+        : null;
+    const parsed = parseForm(form, selectedVendor, editLine);
     if (!parsed) {
       setError("결제날짜, 상품명, 구매처, 수량, 결제금액을 확인해 주세요.");
       return;
@@ -325,18 +350,18 @@ export function ProductPurchaseRegisterDialog({
               }
             />
 
-            <div className="space-y-1.5">
-              <Label htmlFor="pp-vendor">
-                구매처 <span className="text-[var(--color-danger)]">*</span>
-              </Label>
-              <Input
-                id="pp-vendor"
-                value={form.vendor}
-                disabled={readOnly}
-                onChange={(e) => patch({ vendor: e.target.value })}
-                placeholder="도매처명"
-              />
-            </div>
+            <PurchaseVendorSelectField
+              vendorId={resolveVendorId(form.vendorId)}
+              vendorSnapshot={editLine?.vendorSnapshot}
+              legacyVendorName={
+                !editLine?.vendorId && editLine?.vendor
+                  ? editLine.vendor
+                  : undefined
+              }
+              required
+              disabled={readOnly}
+              onVendorIdChange={(id) => patch({ vendorId: id ?? "" })}
+            />
 
             <div className="space-y-1.5">
               <Label htmlFor="pp-order-no">주문번호</Label>

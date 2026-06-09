@@ -14,6 +14,8 @@ import {
   formatRecommendedPriceRange,
 } from "@/lib/purchase-product-calc";
 import { formatPurchaseLineBankLabel } from "@/lib/purchase-bank-display";
+import { formatPurchaseLineVendorLabel } from "@/lib/purchase-vendor-display";
+import { PurchaseVendorLabel } from "@/components/ledger/purchase/purchase-vendor-label";
 import type { ProductPurchaseLine } from "@/types/purchase-product";
 import {
   purchasePrimaryActionClass,
@@ -340,7 +342,12 @@ function DesktopRow({
           cn(truncateCellClass, "text-[var(--color-text-secondary)]"),
         )}
       >
-        <TruncatedText value={line.vendor} />
+        <PurchaseVendorLabel
+          vendorId={line.vendorId}
+          vendorSnapshot={line.vendorSnapshot}
+          vendor={line.vendor}
+          className="block min-w-0 truncate"
+        />
       </div>
       <div
         {...clickableCellProps(
@@ -484,7 +491,10 @@ function MobileCard({
       label: "상품명",
       value: <ProductNameCell name={line.productName} href={line.productLink} />,
     },
-    { label: "구매처", value: line.vendor },
+    {
+      label: "구매처",
+      value: formatPurchaseLineVendorLabel(line),
+    },
     { label: "개수", value: `${line.quantity}개` },
     { label: "결제금액", value: `${formatAmount(line.paymentAmount)}원` },
     { label: "개당금액", value: `${formatAmount(unitPrice)}원` },

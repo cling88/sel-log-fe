@@ -1,6 +1,9 @@
 import type { PurchaseLineBankFields } from "@/types/bank-account";
+import type { PurchaseLineVendorFields } from "@/types/vendor";
 
-export interface ProductPurchaseLine extends PurchaseLineBankFields {
+export interface ProductPurchaseLine
+  extends PurchaseLineBankFields,
+    PurchaseLineVendorFields {
   id: string;
   paymentDate: string;
   orderNo: string;
@@ -22,11 +25,11 @@ export interface ProductPurchaseLineInput {
   imageUrl: string;
   productName: string;
   productLink: string;
-  vendor: string;
   quantity: string;
   paymentAmount: string;
   memo: string;
   bankId: string;
+  vendorId: string;
 }
 
 /** @param paymentDate 미지정 시 호출 측에서 `todayIso()` 등 오늘 날짜를 넘깁니다 */
@@ -39,10 +42,10 @@ export function createEmptyProductPurchaseInput(
     imageUrl: "",
     productName: "",
     productLink: "",
-    vendor: "",
     quantity: "",
     paymentAmount: "",
     memo: "",
     bankId: "",
+    vendorId: "",
   };
 }

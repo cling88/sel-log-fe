@@ -12,6 +12,8 @@ import {
   useDeleteProductPurchaseLine,
   usePatchPurchaseGroup,
   usePatchPurchaseGroupCancel,
+  usePatchPurchaseVendorGroup,
+  usePatchPurchaseVendorGroupCancel,
   useProductPurchaseList,
   useReflectProductPurchaseStock,
   useUpdateProductPurchaseLine,
@@ -30,9 +32,8 @@ import { PurchaseListPagination } from "@/components/ledger/purchase/purchase-li
 import { PurchaseListToolbar } from "@/components/ledger/purchase/purchase-list-toolbar";
 import { Button } from "@/components/ui/button";
 import {
-  createDefaultGroupMeta,
   sanitizeAdjustments,
-  type PurchaseGroupMeta,
+  type PurchaseGroupAdjustment,
 } from "@/types/purchase-group";
 import type { ProductPurchaseLine } from "@/types/purchase-product";
 import type { StockReflectInfo } from "@/components/ledger/purchase/ledger-stock-reflect-dialog";
@@ -51,7 +52,7 @@ export function ProductPurchasePanel() {
     null,
   );
   const [bulkQueue, setBulkQueue] = useState<string[]>([]);
-  const [savingSummaryDate, setSavingSummaryDate] = useState<string | null>(null);
+  const [savingSummaryKey, setSavingSummaryKey] = useState<string | null>(null);
   const month = useLedgerMonthParam();
 
   useEffect(() => {
@@ -73,9 +74,10 @@ export function ProductPurchasePanel() {
   const cancelReflect = useCancelProductPurchaseStockReflect();
   const patchGroup = usePatchPurchaseGroup();
   const patchGroupCancel = usePatchPurchaseGroupCancel();
+  const patchVendorGroup = usePatchPurchaseVendorGroup();
+  const patchVendorGroupCancel = usePatchPurchaseVendorGroupCancel();
 
   const groups = listData?.groups ?? [];
-  const groupMeta = listData?.groupMeta ?? {};
   const lines = listData?.lines ?? [];
   const listMeta = listData?.meta;
   const listTotal = listMeta?.total ?? 0;
@@ -206,7 +208,6 @@ export function ProductPurchasePanel() {
   }) => {
     if (!editGroupDate) return;
     const oldDate = editGroupDate;
-    const meta = groupMeta[oldDate] ?? createDefaultGroupMeta(0);
     const groupLines = lines.filter((l) => l.paymentDate === oldDate);
 
     if (newDate !== oldDate) {
@@ -230,16 +231,6 @@ export function ProductPurchasePanel() {
     await patchGroup.mutateAsync({
       paymentDate: newDate,
       groupName,
-      extraFees: meta.extraFees.map(({ id, label, amount }) => ({
-        id,
-        label,
-        amount,
-      })),
-      discounts: meta.discounts.map(({ id, label, amount }) => ({
-        id,
-        label,
-        amount,
-      })),
     });
 
     setEditGroupDate(null);
@@ -282,24 +273,64 @@ export function ProductPurchasePanel() {
     setStockReflectLineId(pending[0]);
   };
 
-  const handleToggleOrderCancel = async (paymentDate: string) => {
-    const current = groupMeta[paymentDate] ?? createDefaultGroupMeta(0);
+  const handleBulkVendorStockReflect = async (
+    paymentDate: string,
+    vendorId: string,
+  ) => {
+    const pending = lines
+      .filter(
+        (l) =>
+          l.paymentDate === paymentDate &&
+          l.vendorId === vendorId &&
+          !l.stockReflected,
+      )
+      .map((l) => l.id);
+    if (pending.length === 0) return;
+    const ok = await confirm({
+      title: "구매처 재고 반영",
+      message: `이 구매처 미반영 ${pending.length}건을 순서대로 재고 반영합니다.`,
+      confirmLabel: "시작",
+    });
+    if (!ok) return;
+    setBulkQueue(pending);
+    setStockReflectLineId(pending[0]);
+  };
+
+  const handleToggleDateOrderCancel = async (paymentDate: string) => {
+    const group = groups.find((g) => g.paymentDate === paymentDate);
     await patchGroupCancel.mutateAsync({
       paymentDate,
-      orderCancelled: !current.orderCancelled,
+      orderCancelled: !(group?.orderCancelled ?? false),
     });
   };
 
-  const handleSaveGroupSummary = async (
+  const handleToggleVendorOrderCancel = async (
     paymentDate: string,
-    patch: Pick<PurchaseGroupMeta, "extraFees" | "discounts">,
+    vendorId: string,
   ) => {
-    const meta = groupMeta[paymentDate] ?? createDefaultGroupMeta(0);
-    setSavingSummaryDate(paymentDate);
+    const group = groups.find((g) => g.paymentDate === paymentDate);
+    const vendorGroup = group?.vendorGroups.find((vg) => vg.vendorId === vendorId);
+    await patchVendorGroupCancel.mutateAsync({
+      paymentDate,
+      vendorId,
+      orderCancelled: !(vendorGroup?.orderCancelled ?? false),
+    });
+  };
+
+  const handleSaveVendorSummary = async (
+    paymentDate: string,
+    vendorId: string,
+    patch: Pick<
+      { extraFees: PurchaseGroupAdjustment[]; discounts: PurchaseGroupAdjustment[] },
+      "extraFees" | "discounts"
+    >,
+  ) => {
+    const key = `${paymentDate}:${vendorId}`;
+    setSavingSummaryKey(key);
     try {
-      await patchGroup.mutateAsync({
+      await patchVendorGroup.mutateAsync({
         paymentDate,
-        groupName: meta.groupName,
+        vendorId,
         extraFees: sanitizeAdjustments(patch.extraFees).map(
           ({ id, label, amount }) => ({ id, label, amount }),
         ),
@@ -309,7 +340,7 @@ export function ProductPurchasePanel() {
       });
       await alert("추가금·할인금이 저장되었습니다.");
     } finally {
-      setSavingSummaryDate(null);
+      setSavingSummaryKey(null);
     }
   };
 
@@ -333,8 +364,8 @@ export function ProductPurchasePanel() {
     !hasCommittedSearch && !isLoading && !isError && listTotal === 0;
   const listErrorMessage = isError ? getPurchaseErrorMessage(error) : null;
 
-  const editingGroupMeta = editGroupDate
-    ? groupMeta[editGroupDate]
+  const editingGroup = editGroupDate
+    ? groups.find((g) => g.paymentDate === editGroupDate)
     : undefined;
 
   return (
@@ -389,17 +420,24 @@ export function ProductPurchasePanel() {
               <div className={ledgerListBodyClass}>
                 <ProductPurchaseGroupList
                   groups={groups}
-                  groupMeta={groupMeta}
                   onAddToGroup={(date) => openRegister(date)}
                   onReflectStock={setStockReflectLineId}
                   onCancelStockReflect={(id) => void handleCancelStockReflect(id)}
                   onLineClick={openEditLine}
                   onEditGroup={(date) => setEditGroupDate(date)}
                   onDeleteGroup={(date) => void handleDeleteGroup(date)}
-                  onSaveGroupSummary={handleSaveGroupSummary}
-                  savingSummaryDate={savingSummaryDate}
+                  onSaveVendorSummary={handleSaveVendorSummary}
+                  savingSummaryKey={savingSummaryKey}
                   onBulkStockReflect={(date) => void handleBulkStockReflect(date)}
-                  onToggleOrderCancel={(date) => void handleToggleOrderCancel(date)}
+                  onBulkVendorStockReflect={(date, vendorId) =>
+                    void handleBulkVendorStockReflect(date, vendorId)
+                  }
+                  onToggleDateOrderCancel={(date) =>
+                    void handleToggleDateOrderCancel(date)
+                  }
+                  onToggleVendorOrderCancel={(date, vendorId) =>
+                    void handleToggleVendorOrderCancel(date, vendorId)
+                  }
                 />
               </div>
               <div className={ledgerListFooterClass}>
@@ -438,7 +476,7 @@ export function ProductPurchasePanel() {
         }}
         paymentDate={editGroupDate ?? ""}
         groupName={
-          editingGroupMeta?.groupName ??
+          editingGroup?.groupName?.trim() ||
           (editGroupDate ? `매입1` : "")
         }
         onSave={handleGroupSave}

@@ -17,6 +17,8 @@ import {
 } from "@/components/ledger/purchase/purchase-ui";
 import { formatAmount } from "@/lib/purchase-product-calc";
 import { formatPurchaseLineBankLabel } from "@/lib/purchase-bank-display";
+import { PurchaseVendorLabel } from "@/components/ledger/purchase/purchase-vendor-label";
+import { formatPurchaseLineVendorLabel } from "@/lib/purchase-vendor-display";
 import type { SupplyExpenseLine } from "@/types/purchase-supply";
 import { cn } from "@/lib/utils";
 
@@ -138,7 +140,12 @@ function DesktopRow({
         {line.itemName}
       </div>
       <div className={cn(purchaseTableBodyCellClass, "text-[var(--color-text-secondary)]")}>
-        {line.vendor || "—"}
+        <PurchaseVendorLabel
+          vendorId={line.vendorId}
+          vendorSnapshot={line.vendorSnapshot}
+          vendor={line.vendor}
+          className="block min-w-0 truncate"
+        />
       </div>
       <div className={cn(purchaseTableBodyCellClass, "justify-end tabular-nums")}>
         {line.quantity}
@@ -183,7 +190,10 @@ function MobileCard({
   const fields: { label: string; value: ReactNode }[] = [
     { label: "번호", value: index + 1 },
     { label: "항목명", value: line.itemName },
-    { label: "구매처", value: line.vendor || "—" },
+  {
+      label: "구매처",
+      value: formatPurchaseLineVendorLabel(line),
+    },
     { label: "수량", value: `${line.quantity}개` },
     { label: "금액", value: `${formatAmount(line.paymentAmount)}원` },
     { label: "출금계좌", value: formatPurchaseLineBankLabel(line) },

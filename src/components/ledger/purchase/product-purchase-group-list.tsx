@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { ProductPurchaseDateTotals } from "@/components/ledger/purchase/product-purchase-date-totals";
 import { ProductPurchaseGroupSummary } from "@/components/ledger/purchase/product-purchase-group-summary";
 import { ProductPurchaseLineList } from "@/components/ledger/purchase/product-purchase-line-list";
+import { PurchaseVendorLabel } from "@/components/ledger/purchase/purchase-vendor-label";
 import {
   purchaseGroupBodyClass,
   purchaseGroupCardClass,
@@ -12,44 +14,54 @@ import {
 } from "@/components/ledger/purchase/purchase-ui";
 import { Button } from "@/components/ui/button";
 import { formatDisplayDate } from "@/lib/date";
-import { calcGroupExpenseTotals } from "@/lib/purchase-product-calc";
+import { formatAmount } from "@/lib/purchase-product-calc";
 import { formatWon } from "@/lib/utils";
-import type { PurchaseGroupMeta } from "@/types/purchase-group";
-import type { ProductPurchaseLine } from "@/types/purchase-product";
+import {
+  vendorGroupLinesTotal,
+  type PurchaseDateGroup,
+  type PurchaseGroupAdjustment,
+} from "@/types/purchase-group";
 import { ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ProductPurchaseGroupListProps {
-  groups: { paymentDate: string; lines: ProductPurchaseLine[] }[];
-  groupMeta: Record<string, PurchaseGroupMeta>;
+  groups: PurchaseDateGroup[];
   onAddToGroup: (paymentDate: string) => void;
   onReflectStock: (lineId: string) => void;
   onCancelStockReflect: (lineId: string) => void;
   onLineClick: (lineId: string) => void;
   onEditGroup: (paymentDate: string) => void;
   onDeleteGroup: (paymentDate: string) => void;
-  onSaveGroupSummary: (
+  onSaveVendorSummary: (
     paymentDate: string,
-    patch: Pick<PurchaseGroupMeta, "extraFees" | "discounts">,
+    vendorId: string,
+    patch: { extraFees: PurchaseGroupAdjustment[]; discounts: PurchaseGroupAdjustment[] },
   ) => void | Promise<void>;
-  savingSummaryDate?: string | null;
+  savingSummaryKey?: string | null;
   onBulkStockReflect: (paymentDate: string) => void;
-  onToggleOrderCancel: (paymentDate: string) => void;
+  onBulkVendorStockReflect: (paymentDate: string, vendorId: string) => void;
+  onToggleDateOrderCancel: (paymentDate: string) => void;
+  onToggleVendorOrderCancel: (paymentDate: string, vendorId: string) => void;
+}
+
+function summarySaveKey(paymentDate: string, vendorId: string) {
+  return `${paymentDate}:${vendorId}`;
 }
 
 export function ProductPurchaseGroupList({
   groups,
-  groupMeta,
   onAddToGroup,
   onReflectStock,
   onCancelStockReflect,
   onLineClick,
   onEditGroup,
   onDeleteGroup,
-  onSaveGroupSummary,
-  savingSummaryDate,
+  onSaveVendorSummary,
+  savingSummaryKey,
   onBulkStockReflect,
-  onToggleOrderCancel,
+  onBulkVendorStockReflect,
+  onToggleDateOrderCancel,
+  onToggleVendorOrderCancel,
 }: ProductPurchaseGroupListProps) {
   const [expandedDates, setExpandedDates] = useState<Set<string>>(
     () => new Set(groups.map((g) => g.paymentDate)),
@@ -68,32 +80,23 @@ export function ProductPurchaseGroupList({
     <div className="flex flex-col gap-3">
       {groups.map((group, groupIndex) => {
         const expanded = expandedDates.has(group.paymentDate);
-        const meta =
-          groupMeta[group.paymentDate] ??
-          ({
-            groupName: `매입${groupIndex + 1}`,
-            extraFees: [],
-            discounts: [],
-            orderCancelled: false,
-          } satisfies PurchaseGroupMeta);
-        const { totalOrder, totalExpense } = calcGroupExpenseTotals(
-          group.lines,
-          meta.extraFees,
-          meta.discounts,
-        );
-        const pendingStock = group.lines.filter((l) => !l.stockReflected).length;
+        const groupName =
+          group.groupName?.trim() || `매입${groupIndex + 1}`;
+        const allLines = group.vendorGroups.flatMap((vg) => vg.lines);
+        const lineCount = allLines.length;
+        const pendingStock = allLines.filter((l) => !l.stockReflected).length;
         const hasPendingStock = pendingStock > 0;
-        const cancelled = meta.orderCancelled;
+        const dateCancelled = group.orderCancelled;
 
         return (
           <div
             key={group.paymentDate}
             className={cn(
               "relative",
-              purchaseGroupCardClass(hasPendingStock && !cancelled),
+              purchaseGroupCardClass(hasPendingStock && !dateCancelled),
             )}
           >
-            {cancelled ? (
+            {dateCancelled ? (
               <div
                 className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-slate-900/50 backdrop-blur-[1px]"
                 aria-hidden
@@ -126,29 +129,30 @@ export function ProductPurchaseGroupList({
                 <span className="min-w-0 flex-1 text-left">
                   <span className="flex flex-wrap items-center gap-1.5">
                     <span className="text-sm font-semibold text-[var(--color-text-primary)]">
-                      {meta.groupName}
+                      {groupName}
                     </span>
-                    {hasPendingStock && !cancelled ? (
+                    {hasPendingStock && !dateCancelled ? (
                       <span className={purchaseStatusBadgePendingClass}>
                         재고 미반영 {pendingStock}
                       </span>
-                    ) : !cancelled ? (
+                    ) : !dateCancelled ? (
                       <span className="text-[11px] text-[var(--color-text-muted)]">
                         재고 반영 완료
                       </span>
                     ) : null}
                   </span>
                   <span className="mt-0.5 block text-[11px] text-[var(--color-text-muted)]">
-                    {formatDisplayDate(group.paymentDate)} · {group.lines.length}건
+                    {formatDisplayDate(group.paymentDate)} · {lineCount}건 ·
+                    구매처 {group.vendorGroups.length}곳
                   </span>
                 </span>
               </button>
 
               <div className="flex shrink-0 items-center gap-2">
                 <p className="text-sm font-semibold tabular-nums tracking-tight text-[var(--color-expense)]">
-                  -{formatWon(totalExpense)}
+                  -{formatWon(group.totals.grandTotal)}
                 </p>
-                {!cancelled ? (
+                {!dateCancelled ? (
                   <div className="flex gap-0.5">
                     <Button
                       type="button"
@@ -179,29 +183,144 @@ export function ProductPurchaseGroupList({
               <div
                 className={cn(
                   purchaseGroupBodyClass,
-                  cancelled && "pointer-events-none opacity-50",
+                  dateCancelled && "pointer-events-none opacity-50",
                 )}
               >
-                <ProductPurchaseLineList
-                  lines={group.lines}
-                  pricing={{ totalOrder, totalExpense }}
-                  groupDisabled={cancelled}
-                  onReflectStock={onReflectStock}
-                  onCancelStockReflect={onCancelStockReflect}
-                  onLineClick={onLineClick}
-                />
+                <div className="flex flex-col gap-4">
+                  {group.vendorGroups.map((vendorGroup) => {
+                    const vendorLinesTotal = vendorGroupLinesTotal(
+                      vendorGroup.lines,
+                    );
+                    const vendorKey = summarySaveKey(
+                      group.paymentDate,
+                      vendorGroup.vendorId,
+                    );
+                    const vendorCancelled = vendorGroup.orderCancelled;
+                    const vendorPending = vendorGroup.lines.filter(
+                      (l) => !l.stockReflected,
+                    ).length;
 
-                <ProductPurchaseGroupSummary
-                  groupKey={group.paymentDate}
-                  totalOrder={totalOrder}
-                  meta={meta}
-                  disabled={cancelled}
-                  saving={savingSummaryDate === group.paymentDate}
-                  onSave={(patch) => onSaveGroupSummary(group.paymentDate, patch)}
-                />
+                    return (
+                      <div
+                        key={vendorGroup.vendorId}
+                        className="relative rounded-lg border border-[var(--color-border)]/90 bg-white"
+                      >
+                        {vendorCancelled && !dateCancelled ? (
+                          <div
+                            className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center rounded-lg bg-slate-900/40"
+                            aria-hidden
+                          >
+                            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-800 shadow">
+                              구매처 주문취소
+                            </span>
+                          </div>
+                        ) : null}
+
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)]/80 px-2.5 py-2">
+                          <div className="min-w-0">
+                            <PurchaseVendorLabel
+                              vendorId={vendorGroup.vendorId}
+                              vendorSnapshot={vendorGroup.vendorSnapshot}
+                              vendor={vendorGroup.vendorSnapshot.name}
+                              className="text-sm font-semibold text-[var(--color-text-primary)]"
+                            />
+                            <p className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">
+                              {vendorGroup.lines.length}건
+                              {vendorPending > 0 && !vendorCancelled
+                                ? ` · 재고 미반영 ${vendorPending}`
+                                : ""}
+                            </p>
+                          </div>
+                          <p className="text-sm font-semibold tabular-nums text-[var(--color-expense)]">
+                            -{formatAmount(vendorGroup.subtotal)}원
+                          </p>
+                        </div>
+
+                        <div
+                          className={cn(
+                            "px-1 pb-2 pt-1",
+                            vendorCancelled && "opacity-60",
+                          )}
+                        >
+                          <ProductPurchaseLineList
+                            lines={vendorGroup.lines}
+                            pricing={{
+                              totalOrder: vendorLinesTotal,
+                              totalExpense: vendorGroup.subtotal,
+                            }}
+                            groupDisabled={dateCancelled || vendorCancelled}
+                            onReflectStock={onReflectStock}
+                            onCancelStockReflect={onCancelStockReflect}
+                            onLineClick={onLineClick}
+                          />
+
+                          <div className="px-2">
+                            <ProductPurchaseGroupSummary
+                              groupKey={vendorKey}
+                              totalOrder={vendorLinesTotal}
+                              meta={{
+                                groupName: "",
+                                extraFees: vendorGroup.extraFees,
+                                discounts: vendorGroup.discounts,
+                                orderCancelled: vendorGroup.orderCancelled,
+                              }}
+                              disabled={dateCancelled || vendorCancelled}
+                              saving={savingSummaryKey === vendorKey}
+                              onSave={(patch) =>
+                                onSaveVendorSummary(
+                                  group.paymentDate,
+                                  vendorGroup.vendorId,
+                                  patch,
+                                )
+                              }
+                            />
+                          </div>
+
+                          {!dateCancelled ? (
+                            <div className="flex justify-end gap-2 px-2 pt-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={vendorPending === 0 || vendorCancelled}
+                                className="h-7 border-[var(--color-border)] bg-white text-xs"
+                                onClick={() =>
+                                  onBulkVendorStockReflect(
+                                    group.paymentDate,
+                                    vendorGroup.vendorId,
+                                  )
+                                }
+                              >
+                                재고반영
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 border-[var(--color-border)] bg-white text-xs"
+                                onClick={() =>
+                                  onToggleVendorOrderCancel(
+                                    group.paymentDate,
+                                    vendorGroup.vendorId,
+                                  )
+                                }
+                              >
+                                {vendorCancelled
+                                  ? "구매처 취소 해제"
+                                  : "구매처 주문취소"}
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <ProductPurchaseDateTotals totals={group.totals} />
 
                 <div className={purchaseGroupFooterClass}>
-                  {!cancelled ? (
+                  {!dateCancelled ? (
                     <>
                       <Button
                         type="button"
@@ -226,7 +345,7 @@ export function ProductPurchaseGroupList({
                         variant="outline"
                         size="sm"
                         className="border-[var(--color-border)] bg-white text-[var(--color-text-secondary)]"
-                        onClick={() => onToggleOrderCancel(group.paymentDate)}
+                        onClick={() => onToggleDateOrderCancel(group.paymentDate)}
                       >
                         일괄 주문취소
                       </Button>
@@ -237,7 +356,7 @@ export function ProductPurchaseGroupList({
                       variant="outline"
                       size="sm"
                       className="bg-white"
-                      onClick={() => onToggleOrderCancel(group.paymentDate)}
+                      onClick={() => onToggleDateOrderCancel(group.paymentDate)}
                     >
                       주문취소 해제
                     </Button>

@@ -1,3 +1,6 @@
+import type { VendorSummary } from "@/types/vendor";
+import type { ProductPurchaseLine } from "@/types/purchase-product";
+
 export interface PurchaseGroupAdjustment {
   id: string;
   label: string;
@@ -68,4 +71,42 @@ export function areGroupAdjustmentsDirty(
     JSON.stringify(normalize(saved.discounts)) !==
       JSON.stringify(normalize(draft.discounts))
   );
+}
+
+export type PurchaseDateGroupTotals = {
+  linesTotal: number;
+  extraFeesTotal: number;
+  discountsTotal: number;
+  grandTotal: number;
+};
+
+export type VendorPurchaseGroup = {
+  vendorId: string;
+  vendorSnapshot: VendorSummary;
+  extraFees: PurchaseGroupAdjustment[];
+  discounts: PurchaseGroupAdjustment[];
+  orderCancelled: boolean;
+  subtotal: number;
+  lines: ProductPurchaseLine[];
+};
+
+export type PurchaseDateGroup = {
+  paymentDate: string;
+  groupName: string | null;
+  orderCancelled: boolean;
+  vendorGroups: VendorPurchaseGroup[];
+  totals: PurchaseDateGroupTotals;
+};
+
+export function vendorGroupLinesTotal(lines: ProductPurchaseLine[]): number {
+  return lines.reduce((sum, line) => sum + line.paymentAmount, 0);
+}
+
+export function emptyPurchaseDateGroupTotals(): PurchaseDateGroupTotals {
+  return {
+    linesTotal: 0,
+    extraFeesTotal: 0,
+    discountsTotal: 0,
+    grandTotal: 0,
+  };
 }

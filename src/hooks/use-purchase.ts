@@ -21,6 +21,8 @@ import {
   getPurchaseErrorMessage,
   patchPurchaseGroup,
   patchPurchaseGroupCancel,
+  patchPurchaseVendorGroup,
+  patchPurchaseVendorGroupCancel,
   PURCHASE_API_GROUPS_PAGE_SIZE,
   reflectProductPurchaseStock,
   reflectSupplyStock,
@@ -31,6 +33,7 @@ import {
   updateProductPurchaseLine,
   updateSupplyExpenseLine,
   type PatchPurchaseGroupBody,
+  type PatchPurchaseVendorGroupBody,
   type ProductPurchaseLinePayload,
   type StockReflectPayload,
 } from "@/lib/api/purchase";
@@ -212,6 +215,37 @@ export function usePatchPurchaseGroupCancel() {
       paymentDate: string;
       orderCancelled: boolean;
     }) => patchPurchaseGroupCancel(paymentDate, orderCancelled),
+    onSuccess: () => invalidateAllPurchase(queryClient),
+    onError: async (e) => alert(getPurchaseErrorMessage(e)),
+  });
+}
+
+export function usePatchPurchaseVendorGroup() {
+  const queryClient = useQueryClient();
+  const { alert } = useAppDialog();
+
+  return useMutation({
+    mutationFn: (body: PatchPurchaseVendorGroupBody) =>
+      patchPurchaseVendorGroup(body),
+    onSuccess: () => invalidateAllPurchase(queryClient),
+    onError: async (e) => alert(getPurchaseErrorMessage(e)),
+  });
+}
+
+export function usePatchPurchaseVendorGroupCancel() {
+  const queryClient = useQueryClient();
+  const { alert } = useAppDialog();
+
+  return useMutation({
+    mutationFn: ({
+      paymentDate,
+      vendorId,
+      orderCancelled,
+    }: {
+      paymentDate: string;
+      vendorId: string;
+      orderCancelled: boolean;
+    }) => patchPurchaseVendorGroupCancel(paymentDate, vendorId, orderCancelled),
     onSuccess: () => invalidateAllPurchase(queryClient),
     onError: async (e) => alert(getPurchaseErrorMessage(e)),
   });

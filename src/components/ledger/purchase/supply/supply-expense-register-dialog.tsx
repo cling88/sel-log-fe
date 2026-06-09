@@ -18,6 +18,9 @@ import { cn } from "@/lib/utils";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { REGISTER_MODAL_FOOTER_CLASS } from "@/components/ledger/purchase/ledger-register-dialog-classes";
 import { PurchaseBankSelectField } from "@/components/ledger/purchase/purchase-bank-select-field";
+import { PurchaseVendorSelectField } from "@/components/ledger/purchase/purchase-vendor-select-field";
+import { useVendors } from "@/hooks/use-vendors";
+import type { VendorSummary } from "@/types/vendor";
 import {
   createEmptySupplyExpenseInput,
   type SupplyExpenseLine,
@@ -43,7 +46,7 @@ function lineToInput(line: SupplyExpenseLine): SupplyExpenseLineInput {
   return {
     paymentDate: line.paymentDate,
     itemName: line.itemName,
-    vendor: line.vendor,
+    vendorId: line.vendorId ?? "",
     quantity: String(line.quantity),
     paymentAmount: String(line.paymentAmount),
     memo: line.memo,
@@ -64,16 +67,26 @@ function resolveBankId(raw: string): string | null {
   return trimmed || null;
 }
 
+function resolveVendorId(raw: string): string | null {
+  const trimmed = raw.trim();
+  return trimmed || null;
+}
+
 function parseForm(
   form: SupplyExpenseLineInput,
+  selectedVendor: VendorSummary | null,
   editLine?: SupplyExpenseLine | null,
 ): Omit<SupplyExpenseLine, "id" | "stockReflected"> | null {
   const itemName = form.itemName.trim();
   const paymentDate = form.paymentDate.trim();
   const quantity = Number(form.quantity);
   const paymentAmount = Number(form.paymentAmount);
+  const vendorId = resolveVendorId(form.vendorId);
 
   if (!paymentDate || !itemName || quantity <= 0 || paymentAmount < 0) {
+    return null;
+  }
+  if (vendorId && (!selectedVendor || selectedVendor.id !== vendorId)) {
     return null;
   }
 
@@ -82,7 +95,9 @@ function parseForm(
   return {
     paymentDate,
     itemName,
-    vendor: form.vendor.trim(),
+    vendor: selectedVendor?.name ?? "",
+    vendorId,
+    vendorSnapshot: selectedVendor,
     quantity,
     paymentAmount,
     memo: form.memo.trim(),
@@ -106,6 +121,7 @@ export function SupplyExpenseRegisterDialog({
   deleteDisabledReason,
 }: SupplyExpenseRegisterDialogProps) {
   const { alert } = useAppDialog();
+  const { vendors } = useVendors();
   const isEdit = editLine != null;
   const [form, setForm] = useState<SupplyExpenseLineInput>(() =>
     createEmptySupplyExpenseInput(resolvePaymentDate(defaultPaymentDate)),
@@ -153,7 +169,12 @@ export function SupplyExpenseRegisterDialog({
   };
 
   const submit = async (closeAfter: boolean) => {
-    const parsed = parseForm(form, editLine);
+    const vendorId = resolveVendorId(form.vendorId);
+    const selectedVendor =
+      vendorId != null
+        ? vendors.find((v) => v.id === vendorId) ?? null
+        : null;
+    const parsed = parseForm(form, selectedVendor, editLine);
     if (!parsed) {
       setError("결제날짜, 항목명, 수량, 금액을 확인해 주세요.");
       return;
@@ -229,15 +250,16 @@ export function SupplyExpenseRegisterDialog({
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="se-vendor">구매처</Label>
-              <Input
-                id="se-vendor"
-                value={form.vendor}
-                onChange={(e) => patch({ vendor: e.target.value })}
-                placeholder="선택"
-              />
-            </div>
+            <PurchaseVendorSelectField
+              vendorId={resolveVendorId(form.vendorId)}
+              vendorSnapshot={editLine?.vendorSnapshot}
+              legacyVendorName={
+                !editLine?.vendorId && editLine?.vendor
+                  ? editLine.vendor
+                  : undefined
+              }
+              onVendorIdChange={(id) => patch({ vendorId: id ?? "" })}
+            />
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

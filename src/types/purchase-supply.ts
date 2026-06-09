@@ -1,6 +1,9 @@
 import type { PurchaseLineBankFields } from "@/types/bank-account";
+import type { PurchaseLineVendorFields } from "@/types/vendor";
 
-export interface SupplyExpenseLine extends PurchaseLineBankFields {
+export interface SupplyExpenseLine
+  extends PurchaseLineBankFields,
+    PurchaseLineVendorFields {
   id: string;
   paymentDate: string;
   itemName: string;
@@ -14,11 +17,11 @@ export interface SupplyExpenseLine extends PurchaseLineBankFields {
 export interface SupplyExpenseLineInput {
   paymentDate: string;
   itemName: string;
-  vendor: string;
   quantity: string;
   paymentAmount: string;
   memo: string;
   bankId: string;
+  vendorId: string;
 }
 
 export function createEmptySupplyExpenseInput(
@@ -27,10 +30,10 @@ export function createEmptySupplyExpenseInput(
   return {
     paymentDate: paymentDate ?? "",
     itemName: "",
-    vendor: "",
     quantity: "1",
     paymentAmount: "",
     memo: "",
     bankId: "",
+    vendorId: "",
   };
 }

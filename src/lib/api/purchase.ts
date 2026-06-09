@@ -1,5 +1,10 @@
 import { ApiError, apiFetch, type ApiEnvelope } from "@/lib/api-client";
 import { createDefaultGroupMeta, type PurchaseGroupMeta } from "@/types/purchase-group";
+import type {
+  PurchaseDateGroup,
+  PurchaseDateGroupTotals,
+  VendorPurchaseGroup,
+} from "@/types/purchase-group";
 import type { OtherExpenseLine } from "@/types/purchase-other";
 import type { ProductPurchaseLine } from "@/types/purchase-product";
 import type { SupplyExpenseLine } from "@/types/purchase-supply";
@@ -7,6 +12,7 @@ import type { InventoryProduct } from "@/types/inventory-product";
 import { purchaseBankIdForApi } from "@/lib/purchase-bank-display";
 import { normalizeProduct } from "@/lib/api/products";
 import type { BankSummary } from "@/types/bank-account";
+import type { VendorSummary } from "@/types/vendor";
 
 export type PurchaseListMeta = {
   total: number;
@@ -60,6 +66,21 @@ function normalizeOptionalString(value: unknown): string {
   return "";
 }
 
+function normalizeAdjustments(
+  raw: unknown,
+  idPrefix: string,
+): PurchaseGroupMeta["extraFees"] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item, i) => {
+    const row = (item ?? {}) as Record<string, unknown>;
+    return {
+      id: String(row.id ?? `${idPrefix}-${i}`),
+      label: normalizeOptionalString(row.label),
+      amount: Number(row.amount) || 0,
+    };
+  });
+}
+
 function normalizeGroupMeta(
   raw: Record<string, unknown> | null | undefined,
   fallbackIndex: number,
@@ -67,26 +88,8 @@ function normalizeGroupMeta(
   if (!raw || typeof raw !== "object") {
     return createDefaultGroupMeta(fallbackIndex);
   }
-  const extraFees = Array.isArray(raw.extraFees)
-    ? raw.extraFees.map((item, i) => {
-        const row = (item ?? {}) as Record<string, unknown>;
-        return {
-          id: String(row.id ?? `fee-${i}`),
-          label: normalizeOptionalString(row.label),
-          amount: Number(row.amount) || 0,
-        };
-      })
-    : [];
-  const discounts = Array.isArray(raw.discounts)
-    ? raw.discounts.map((item, i) => {
-        const row = (item ?? {}) as Record<string, unknown>;
-        return {
-          id: String(row.id ?? `disc-${i}`),
-          label: normalizeOptionalString(row.label),
-          amount: Number(row.amount) || 0,
-        };
-      })
-    : [];
+  const extraFees = normalizeAdjustments(raw.extraFees, "fee");
+  const discounts = normalizeAdjustments(raw.discounts, "disc");
   return {
     groupName: normalizeOptionalString(raw.groupName) || createDefaultGroupMeta(fallbackIndex).groupName,
     extraFees,
@@ -114,10 +117,50 @@ function normalizeBankId(raw: Record<string, unknown>): string | null {
   return String(value);
 }
 
+function normalizeVendorId(raw: Record<string, unknown>): string | null {
+  const value = raw.vendorId;
+  if (value == null || value === "") return null;
+  return String(value);
+}
+
+function normalizeVendorSummary(raw: unknown): VendorSummary | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const id = String(row.id ?? "").trim();
+  if (!id) return null;
+  return {
+    id,
+    name: normalizeOptionalString(row.name),
+    link: normalizeOptionalString(row.link),
+  };
+}
+
 function normalizePurchaseLineBankFields(raw: Record<string, unknown>) {
   return {
     bankId: normalizeBankId(raw),
     bank: normalizeBankSummary(raw.bank),
+  };
+}
+
+function normalizePurchaseLineVendorFields(raw: Record<string, unknown>) {
+  const vendorRaw = raw.vendor;
+  const vendorSnapshot =
+    normalizeVendorSummary(raw.vendorSnapshot) ??
+    (typeof vendorRaw === "object" ? normalizeVendorSummary(vendorRaw) : null);
+  const vendorId = normalizeVendorId(raw) ?? vendorSnapshot?.id ?? null;
+  const vendorName =
+    (typeof vendorRaw === "string" ? normalizeOptionalString(vendorRaw) : "") ||
+    vendorSnapshot?.name ||
+    "";
+  return {
+    vendor: vendorName,
+    vendorId,
+    vendorSnapshot:
+      vendorSnapshot && vendorId && vendorSnapshot.id === vendorId
+        ? vendorSnapshot
+        : vendorId && vendorName
+          ? { id: vendorId, name: vendorName, link: vendorSnapshot?.link ?? "" }
+          : null,
   };
 }
 
@@ -130,12 +173,12 @@ function normalizeProductPurchaseLine(raw: Record<string, unknown>): ProductPurc
     imageUrl: normalizeOptionalString(raw.imageUrl),
     productName: normalizeOptionalString(raw.productName),
     productLink: normalizeOptionalString(raw.productLink),
-    vendor: normalizeOptionalString(raw.vendor),
     quantity: Number(raw.quantity) || 0,
     paymentAmount: Number(raw.paymentAmount) || 0,
     memo: normalizeOptionalString(raw.memo),
     stockReflected: raw.stockReflected === true,
     ...normalizePurchaseLineBankFields(raw),
+    ...normalizePurchaseLineVendorFields(raw),
     ...(typeof sku === "string" && sku ? { productSku: sku } : {}),
   };
 }
@@ -146,12 +189,12 @@ function normalizeSupplyLine(raw: Record<string, unknown>): SupplyExpenseLine {
     id: String(raw.id ?? ""),
     paymentDate: String(raw.paymentDate ?? ""),
     itemName: normalizeOptionalString(raw.itemName),
-    vendor: normalizeOptionalString(raw.vendor),
     quantity: Number(raw.quantity) || 0,
     paymentAmount: Number(raw.paymentAmount) || 0,
     memo: normalizeOptionalString(raw.memo),
     stockReflected: raw.stockReflected === true,
     ...normalizePurchaseLineBankFields(raw),
+    ...normalizePurchaseLineVendorFields(raw),
     ...(typeof sku === "string" && sku ? { productSku: sku } : {}),
   };
 }
@@ -173,34 +216,154 @@ export type ProductPurchaseGroupRow = {
 };
 
 export type ProductPurchaseListResult = {
-  groups: ProductPurchaseGroupRow[];
-  groupMeta: Record<string, PurchaseGroupMeta>;
+  groups: PurchaseDateGroup[];
   lines: ProductPurchaseLine[];
   meta: PurchaseListMeta;
 };
 
+function normalizePurchaseDateGroupTotals(raw: unknown): PurchaseDateGroupTotals {
+  const row = (raw ?? {}) as Record<string, unknown>;
+  const linesTotal = Number(row.linesTotal) || 0;
+  const extraFeesTotal = Number(row.extraFeesTotal) || 0;
+  const discountsTotal = Number(row.discountsTotal) || 0;
+  const grandTotal =
+    Number(row.grandTotal) || linesTotal + extraFeesTotal - discountsTotal;
+  return { linesTotal, extraFeesTotal, discountsTotal, grandTotal };
+}
+
+function normalizeVendorPurchaseGroup(
+  raw: Record<string, unknown>,
+): VendorPurchaseGroup {
+  const vendorId = String(raw.vendorId ?? "").trim();
+  const vendorSnapshot = normalizeVendorSummary(raw.vendorSnapshot) ?? {
+    id: vendorId || "unknown",
+    name: "구매처 없음",
+    link: "",
+  };
+  const lines = (Array.isArray(raw.lines) ? raw.lines : []).map((item) =>
+    normalizeProductPurchaseLine((item ?? {}) as Record<string, unknown>),
+  );
+  return {
+    vendorId: vendorId || vendorSnapshot.id,
+    vendorSnapshot,
+    extraFees: normalizeAdjustments(raw.extraFees, "fee"),
+    discounts: normalizeAdjustments(raw.discounts, "disc"),
+    orderCancelled: raw.orderCancelled === true,
+    subtotal: Number(raw.subtotal) || 0,
+    lines,
+  };
+}
+
+function legacyLinesToVendorGroups(
+  lines: ProductPurchaseLine[],
+  meta: PurchaseGroupMeta,
+): VendorPurchaseGroup[] {
+  if (lines.length === 0) return [];
+
+  const buckets = new Map<string, ProductPurchaseLine[]>();
+  for (const line of lines) {
+    const key = (line.vendorId ?? line.vendor.trim()) || "__none__";
+    const bucket = buckets.get(key) ?? [];
+    bucket.push(line);
+    buckets.set(key, bucket);
+  }
+
+  const vendorGroups: VendorPurchaseGroup[] = [];
+  let first = true;
+  for (const [key, bucketLines] of buckets) {
+    const snapshot = bucketLines[0]?.vendorSnapshot ?? {
+      id: key === "__none__" ? "legacy-none" : key,
+      name: bucketLines[0]?.vendor.trim() || "미지정",
+      link: "",
+    };
+    const linesTotal = bucketLines.reduce((s, l) => s + l.paymentAmount, 0);
+    const extraFees = first ? meta.extraFees : [];
+    const discounts = first ? meta.discounts : [];
+    const extraSum = extraFees.reduce((s, i) => s + Math.max(0, i.amount), 0);
+    const discSum = discounts.reduce((s, i) => s + Math.max(0, i.amount), 0);
+    vendorGroups.push({
+      vendorId: snapshot.id,
+      vendorSnapshot: snapshot,
+      extraFees,
+      discounts,
+      orderCancelled: false,
+      subtotal: linesTotal + extraSum - discSum,
+      lines: bucketLines,
+    });
+    first = false;
+  }
+  return vendorGroups;
+}
+
+function buildTotalsFromVendorGroups(
+  vendorGroups: VendorPurchaseGroup[],
+): PurchaseDateGroupTotals {
+  const linesTotal = vendorGroups.reduce(
+    (sum, vg) => sum + vg.lines.reduce((s, l) => s + l.paymentAmount, 0),
+    0,
+  );
+  const extraFeesTotal = vendorGroups.reduce(
+    (sum, vg) =>
+      sum + vg.extraFees.reduce((s, i) => s + Math.max(0, i.amount), 0),
+    0,
+  );
+  const discountsTotal = vendorGroups.reduce(
+    (sum, vg) =>
+      sum + vg.discounts.reduce((s, i) => s + Math.max(0, i.amount), 0),
+    0,
+  );
+  return {
+    linesTotal,
+    extraFeesTotal,
+    discountsTotal,
+    grandTotal: linesTotal + extraFeesTotal - discountsTotal,
+  };
+}
+
 function mapProductPurchaseGroups(
   data: Record<string, unknown>[],
 ): Omit<ProductPurchaseListResult, "meta"> {
-  const groups: ProductPurchaseGroupRow[] = [];
-  const groupMeta: Record<string, PurchaseGroupMeta> = {};
+  const groups: PurchaseDateGroup[] = [];
   const lines: ProductPurchaseLine[] = [];
 
   data.forEach((row, index) => {
     const paymentDate = String(row.paymentDate ?? "");
+
+    if (Array.isArray(row.vendorGroups)) {
+      const vendorGroups = row.vendorGroups.map((item) =>
+        normalizeVendorPurchaseGroup((item ?? {}) as Record<string, unknown>),
+      );
+      vendorGroups.forEach((vg) => lines.push(...vg.lines));
+      groups.push({
+        paymentDate,
+        groupName: normalizeOptionalString(row.groupName) || null,
+        orderCancelled: row.orderCancelled === true,
+        vendorGroups,
+        totals: normalizePurchaseDateGroupTotals(row.totals),
+      });
+      return;
+    }
+
     const rawLines = Array.isArray(row.lines) ? row.lines : [];
     const normalizedLines = rawLines.map((item) =>
       normalizeProductPurchaseLine((item ?? {}) as Record<string, unknown>),
     );
-    groups.push({ paymentDate, lines: normalizedLines });
-    groupMeta[paymentDate] = normalizeGroupMeta(
+    const meta = normalizeGroupMeta(
       row.groupMeta as Record<string, unknown> | undefined,
       index,
     );
+    const vendorGroups = legacyLinesToVendorGroups(normalizedLines, meta);
     lines.push(...normalizedLines);
+    groups.push({
+      paymentDate,
+      groupName: meta.groupName,
+      orderCancelled: meta.orderCancelled,
+      vendorGroups,
+      totals: buildTotalsFromVendorGroups(vendorGroups),
+    });
   });
 
-  return { groups, groupMeta, lines };
+  return { groups, lines };
 }
 
 /** GET /purchase/products */
@@ -223,7 +386,7 @@ export async function fetchProductPurchaseList(
 export type ProductPurchaseLinePayload = {
   paymentDate: string;
   productName: string;
-  vendor: string;
+  vendorId: string;
   quantity: number;
   paymentAmount: number;
   orderNo?: string;
@@ -245,6 +408,10 @@ function isHttpUrl(value: string): boolean {
 export function toProductPurchaseLinePayload(
   line: Omit<ProductPurchaseLine, "id" | "stockReflected">,
 ): ProductPurchaseLinePayload {
+  const vendorId = line.vendorId?.trim();
+  if (!vendorId) {
+    throw new Error("구매처를 선택해 주세요.");
+  }
   const orderNo = line.orderNo?.trim();
   const imageUrl = line.imageUrl?.trim();
   const productLink = line.productLink?.trim();
@@ -253,7 +420,7 @@ export function toProductPurchaseLinePayload(
   return {
     paymentDate: line.paymentDate,
     productName: line.productName.trim(),
-    vendor: line.vendor.trim(),
+    vendorId,
     quantity: Math.trunc(line.quantity),
     paymentAmount: Math.trunc(line.paymentAmount),
     ...(orderNo ? { orderNo } : {}),
@@ -343,26 +510,35 @@ export async function cancelProductPurchaseStockReflect(
 export type PatchPurchaseGroupBody = {
   paymentDate: string;
   groupName?: string;
+};
+
+export type PatchPurchaseVendorGroupBody = {
+  paymentDate: string;
+  vendorId: string;
   extraFees?: { id?: string; label: string; amount: number }[];
   discounts?: { id?: string; label: string; amount: number }[];
 };
 
-/** PATCH /purchase/groups */
+/** PATCH /purchase/groups — 결제일 공통 (그룹명만) */
 export async function patchPurchaseGroup(
   body: PatchPurchaseGroupBody,
-): Promise<PurchaseGroupMeta> {
+): Promise<{ groupName: string | null; orderCancelled: boolean }> {
   const res = await apiFetch<ApiEnvelope<Record<string, unknown>>>(
     "/purchase/groups",
     { method: "PATCH", body: JSON.stringify(body) },
   );
-  return normalizeGroupMeta(res.data, 0);
+  const row = res.data ?? {};
+  return {
+    groupName: normalizeOptionalString(row.groupName) || null,
+    orderCancelled: row.orderCancelled === true,
+  };
 }
 
-/** PATCH /purchase/groups/cancel */
+/** PATCH /purchase/groups/cancel — 결제일 단위 주문취소 */
 export async function patchPurchaseGroupCancel(
   paymentDate: string,
   orderCancelled: boolean,
-): Promise<PurchaseGroupMeta> {
+): Promise<{ orderCancelled: boolean }> {
   const res = await apiFetch<ApiEnvelope<Record<string, unknown>>>(
     "/purchase/groups/cancel",
     {
@@ -370,7 +546,40 @@ export async function patchPurchaseGroupCancel(
       body: JSON.stringify({ paymentDate, orderCancelled }),
     },
   );
-  return normalizeGroupMeta(res.data, 0);
+  return { orderCancelled: res.data?.orderCancelled === true };
+}
+
+function normalizeVendorGroupFromPatch(
+  raw: Record<string, unknown>,
+): VendorPurchaseGroup {
+  return normalizeVendorPurchaseGroup(raw);
+}
+
+/** PATCH /purchase/groups/vendor — 구매처별 추가금·할인 */
+export async function patchPurchaseVendorGroup(
+  body: PatchPurchaseVendorGroupBody,
+): Promise<VendorPurchaseGroup> {
+  const res = await apiFetch<ApiEnvelope<Record<string, unknown>>>(
+    "/purchase/groups/vendor",
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+  return normalizeVendorGroupFromPatch(res.data ?? {});
+}
+
+/** PATCH /purchase/groups/vendor/cancel — 구매처 단위 주문취소 */
+export async function patchPurchaseVendorGroupCancel(
+  paymentDate: string,
+  vendorId: string,
+  orderCancelled: boolean,
+): Promise<VendorPurchaseGroup> {
+  const res = await apiFetch<ApiEnvelope<Record<string, unknown>>>(
+    "/purchase/groups/vendor/cancel",
+    {
+      method: "PATCH",
+      body: JSON.stringify({ paymentDate, vendorId, orderCancelled }),
+    },
+  );
+  return normalizeVendorGroupFromPatch(res.data ?? {});
 }
 
 // —— Supply ——
@@ -423,7 +632,7 @@ export type SupplyLinePayload = {
   itemName: string;
   quantity: number;
   paymentAmount: number;
-  vendor?: string;
+  vendorId?: string;
   memo?: string;
   bankId?: string | null;
 };
@@ -431,12 +640,13 @@ export type SupplyLinePayload = {
 export function toSupplyLinePayload(
   line: Omit<SupplyExpenseLine, "id" | "stockReflected">,
 ): SupplyLinePayload {
+  const vendorId = line.vendorId?.trim();
   return {
     paymentDate: line.paymentDate,
     itemName: line.itemName,
     quantity: line.quantity,
     paymentAmount: line.paymentAmount,
-    ...(line.vendor ? { vendor: line.vendor } : {}),
+    ...(vendorId ? { vendorId } : {}),
     ...(line.memo ? { memo: line.memo } : {}),
     bankId: purchaseBankIdForApi(line.bankId),
   };

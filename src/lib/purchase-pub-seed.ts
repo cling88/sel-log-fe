@@ -24,6 +24,7 @@ const yesterday = daysAgoIso(1);
 export const PUB_SAMPLE_PRODUCT_IMAGE_URL = "/sample-product.jpg";
 
 const EMPTY_BANK = { bankId: null, bank: null } as const;
+const EMPTY_VENDOR = { vendorId: null, vendorSnapshot: null } as const;
 
 export const PUB_SEED_PRODUCT_LINES: ProductPurchaseLine[] = [
   {
@@ -39,6 +40,7 @@ export const PUB_SEED_PRODUCT_LINES: ProductPurchaseLine[] = [
     memo: "1차 입고",
     stockReflected: false,
     ...EMPTY_BANK,
+    ...EMPTY_VENDOR,
   },
   {
     id: "pp-seed-2",
@@ -53,6 +55,7 @@ export const PUB_SEED_PRODUCT_LINES: ProductPurchaseLine[] = [
     memo: "",
     stockReflected: true,
     ...EMPTY_BANK,
+    ...EMPTY_VENDOR,
   },
 ];
 
@@ -78,6 +81,7 @@ export const PUB_SEED_SUPPLY_LINES: SupplyExpenseLine[] = [
     memo: "",
     stockReflected: false,
     ...EMPTY_BANK,
+    ...EMPTY_VENDOR,
   },
   {
     id: "se-seed-2",
@@ -89,6 +93,7 @@ export const PUB_SEED_SUPPLY_LINES: SupplyExpenseLine[] = [
     memo: "2롤",
     stockReflected: true,
     ...EMPTY_BANK,
+    ...EMPTY_VENDOR,
   },
 ];
 
@@ -100,6 +105,7 @@ export const PUB_SEED_OTHER_LINES: OtherExpenseLine[] = [
     paymentAmount: 550000,
     memo: "5월분",
     ...EMPTY_BANK,
+    ...EMPTY_VENDOR,
   },
   {
     id: "oe-seed-2",
@@ -108,5 +114,6 @@ export const PUB_SEED_OTHER_LINES: OtherExpenseLine[] = [
     paymentAmount: 110000,
     memo: "",
     ...EMPTY_BANK,
+    ...EMPTY_VENDOR,
   },
 ];
