@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { usePurchaseGroupExpanded } from "@/hooks/use-purchase-group-expanded";
 import { OtherExpenseLineList } from "@/components/ledger/purchase/other/other-expense-line-list";
 import {
   purchaseGroupBodyClass,
@@ -16,33 +16,28 @@ import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface OtherExpenseGroupListProps {
+  storageScopeKey: string;
   groups: { paymentDate: string; lines: OtherExpenseLine[] }[];
   onAddToGroup: (paymentDate: string) => void;
   onLineClick: (lineId: string) => void;
 }
 
 export function OtherExpenseGroupList({
+  storageScopeKey,
   groups,
   onAddToGroup,
   onLineClick,
 }: OtherExpenseGroupListProps) {
-  const [expandedDates, setExpandedDates] = useState<Set<string>>(
-    () => new Set(groups.map((g) => g.paymentDate)),
+  const { isExpanded, toggle } = usePurchaseGroupExpanded(
+    "other",
+    storageScopeKey,
+    groups,
   );
-
-  const toggle = (date: string) => {
-    setExpandedDates((prev) => {
-      const next = new Set(prev);
-      if (next.has(date)) next.delete(date);
-      else next.add(date);
-      return next;
-    });
-  };
 
   return (
     <div className="flex flex-col gap-3">
       {groups.map((group) => {
-        const expanded = expandedDates.has(group.paymentDate);
+        const expanded = isExpanded(group.paymentDate);
         const totalPayment = group.lines.reduce(
           (sum, line) => sum + line.paymentAmount,
           0,

@@ -201,6 +201,7 @@ export function SupplyExpensePanel() {
           <>
             <div className={ledgerListBodyClass}>
               <SupplyExpenseGroupList
+                storageScopeKey={month}
                 groups={groups}
                 onAddToGroup={(date) => openRegister(date)}
                 onReflectStock={setStockReflectLineId}

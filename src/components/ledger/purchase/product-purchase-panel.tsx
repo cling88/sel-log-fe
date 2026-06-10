@@ -432,6 +432,7 @@ export function ProductPurchasePanel() {
             <>
               <div className="space-y-2">
                 <ProductPurchaseGroupList
+                  storageScopeKey={month}
                   groups={groups}
                   onAddToGroup={(date) => openRegister(date)}
                   onReflectStock={setStockReflectLineId}

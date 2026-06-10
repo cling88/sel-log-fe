@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { usePurchaseGroupExpanded } from "@/hooks/use-purchase-group-expanded";
 import { ProductPurchaseDateTotals } from "@/components/ledger/purchase/product-purchase-date-totals";
 import { ProductPurchaseGroupSummary } from "@/components/ledger/purchase/product-purchase-group-summary";
 import { ProductPurchaseLineList } from "@/components/ledger/purchase/product-purchase-line-list";
@@ -25,6 +25,7 @@ import { ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ProductPurchaseGroupListProps {
+  storageScopeKey: string;
   groups: PurchaseDateGroup[];
   onAddToGroup: (paymentDate: string) => void;
   onReflectStock: (lineId: string) => void;
@@ -49,6 +50,7 @@ function summarySaveKey(paymentDate: string, vendorId: string) {
 }
 
 export function ProductPurchaseGroupList({
+  storageScopeKey,
   groups,
   onAddToGroup,
   onReflectStock,
@@ -63,23 +65,16 @@ export function ProductPurchaseGroupList({
   onToggleDateOrderCancel,
   onToggleVendorOrderCancel,
 }: ProductPurchaseGroupListProps) {
-  const [expandedDates, setExpandedDates] = useState<Set<string>>(
-    () => new Set(groups.map((g) => g.paymentDate)),
+  const { isExpanded, toggle } = usePurchaseGroupExpanded(
+    "product",
+    storageScopeKey,
+    groups,
   );
-
-  const toggle = (date: string) => {
-    setExpandedDates((prev) => {
-      const next = new Set(prev);
-      if (next.has(date)) next.delete(date);
-      else next.add(date);
-      return next;
-    });
-  };
 
   return (
     <div className="flex flex-col gap-2">
       {groups.map((group, groupIndex) => {
-        const expanded = expandedDates.has(group.paymentDate);
+        const expanded = isExpanded(group.paymentDate);
         const groupName =
           group.groupName?.trim() || `매입${groupIndex + 1}`;
         const allLines = group.vendorGroups.flatMap((vg) => vg.lines);

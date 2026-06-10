@@ -141,6 +141,7 @@ export function OtherExpensePanel() {
           <>
             <div className={ledgerListBodyClass}>
               <OtherExpenseGroupList
+                storageScopeKey={month}
                 groups={groups}
                 onAddToGroup={(date) => openRegister(date)}
                 onLineClick={openLineDetail}
