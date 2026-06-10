@@ -8,6 +8,7 @@ import { logout } from "@/lib/auth";
 const navItems = [
   { href: "/dashboard", label: "대시보드" },
   { href: "/ledger", label: "장부" },
+  { href: "/sourcing", label: "소싱" },
   { href: "/settings", label: "설정" },
 ] as const;
 

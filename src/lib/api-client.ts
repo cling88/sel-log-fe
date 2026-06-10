@@ -8,12 +8,14 @@ import {
 export class ApiError extends Error {
   status: number;
   code?: string;
+  data?: unknown;
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, code?: string, data?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     if (code) this.code = code;
+    if (data !== undefined) this.data = data;
   }
 }
 
@@ -114,6 +116,7 @@ export async function apiFetch<T>(
       res.status,
       resolveErrorMessage(body, res.status),
       body?.error?.code,
+      body?.data,
     );
   }
 
@@ -173,6 +176,7 @@ export async function apiFetchFormData<T>(
       res.status,
       resolveErrorMessage(body, res.status),
       body?.error?.code,
+      body?.data,
     );
   }
 
