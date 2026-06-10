@@ -1,7 +1,6 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Provider as JotaiProvider } from "jotai";
 import { useState } from "react";
 import { AuthSessionSync } from "@/components/auth/auth-session-sync";
 import { AppDialogProvider } from "@/components/common/app-dialog-provider";
@@ -21,13 +20,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <JotaiProvider>
-      <QueryClientProvider client={queryClient}>
-        <AppDialogProvider>
-          <AuthSessionSync />
-          <TooltipProvider>{children}</TooltipProvider>
-        </AppDialogProvider>
-      </QueryClientProvider>
-    </JotaiProvider>
+    <QueryClientProvider client={queryClient}>
+      <AppDialogProvider>
+        <AuthSessionSync />
+        <TooltipProvider>{children}</TooltipProvider>
+      </AppDialogProvider>
+    </QueryClientProvider>
   );
 }

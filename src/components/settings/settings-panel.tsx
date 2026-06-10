@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuthUser } from "@/hooks/use-auth-user";
 import { useSalesChannels } from "@/hooks/use-sales-channels";
 import { useUserSettings } from "@/hooks/use-settings";
 import {
@@ -28,6 +29,7 @@ function inputToRate(value: string, fallback: number): number {
 }
 
 export function SettingsPanel() {
+  const authUser = useAuthUser();
   const { settings, isLoading, errorMessage, updateSettings, isSaving } =
     useUserSettings();
   const { channels, isLoading: channelsLoading } = useSalesChannels();
@@ -106,6 +108,21 @@ export function SettingsPanel() {
           {errorMessage}
         </p>
       ) : null}
+
+      <section className="rounded-xl border border-[var(--color-border)] bg-white p-5 shadow-[var(--shadow-sm)]">
+        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">
+          로그인 계정
+        </h2>
+        {authUser ? (
+          <p className="mt-2 text-sm text-[var(--color-text-primary)]">
+            {authUser.email}
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+            계정 정보를 불러올 수 없습니다.
+          </p>
+        )}
+      </section>
 
       <section className="space-y-4 rounded-xl border border-[var(--color-border)] bg-white p-5 shadow-[var(--shadow-sm)]">
         <div>

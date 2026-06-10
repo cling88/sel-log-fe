@@ -1,3 +1,5 @@
+import { DEFAULT_USER_SETTINGS } from "@/types/settings";
+
 export function calcUnitPrice(quantity: number, paymentAmount: number): number {
   if (quantity <= 0) return 0;
   return Math.round(paymentAmount / quantity);
@@ -6,10 +8,6 @@ export function calcUnitPrice(quantity: number, paymentAmount: number): number {
 export function formatAmount(value: number): string {
   return value.toLocaleString("ko-KR");
 }
-
-/** 퍼블 기본 마진율 (설정 연동 전) */
-export const PUB_MARGIN_MIN = 0.15;
-export const PUB_MARGIN_MAX = 0.5;
 
 export function calcGroupExpenseTotals(
   lines: { paymentAmount: number }[],
@@ -54,8 +52,8 @@ export function formatRecommendedPriceRange(
   unitPrice: number,
   finalUnitPrice: number,
   margins: MarginRateRange = {
-    min: PUB_MARGIN_MIN,
-    max: PUB_MARGIN_MAX,
+    min: DEFAULT_USER_SETTINGS.marginMinRate,
+    max: DEFAULT_USER_SETTINGS.marginMaxRate,
   },
 ): string {
   const prices = [
@@ -69,18 +67,4 @@ export function formatRecommendedPriceRange(
   const max = Math.max(...prices);
   if (min === max) return `${formatAmount(min)}원`;
   return `${formatAmount(min)}~${formatAmount(max)}원`;
-}
-
-export function groupLinesByPaymentDate<T extends { paymentDate: string }>(
-  lines: T[],
-): { paymentDate: string; lines: T[] }[] {
-  const map = new Map<string, T[]>();
-  for (const line of lines) {
-    const bucket = map.get(line.paymentDate) ?? [];
-    bucket.push(line);
-    map.set(line.paymentDate, bucket);
-  }
-  return [...map.entries()]
-    .sort(([a], [b]) => b.localeCompare(a))
-    .map(([paymentDate, groupLines]) => ({ paymentDate, lines: groupLines }));
 }
