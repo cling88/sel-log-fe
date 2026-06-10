@@ -63,36 +63,6 @@ import type {
 import type { InventoryCategory } from "@/types/inventory-category";
 import type { ProductStockStatus } from "@/types/dashboard";
 
-const PRODUCTS_STORAGE_KEY = "sellog-products-pub-v1";
-const PRODUCT_SEED_ISO = "2026-01-01T00:00:00.000Z";
-const SAMPLE_STOCK_HISTORY: InventoryStockHistoryItem = {
-  id: "stk-seed-1",
-  atIso: "2026-01-03T09:30:00.000Z",
-  delta: 12,
-  source: "purchase",
-  vendor: "도매몰A",
-  orderNo: "NV-240501-01",
-  unitPrice: 12500,
-  totalAmount: 150000,
-  reason: "초기 샘플 입고",
-};
-const SAMPLE_PRICE_HISTORY: InventoryPriceHistoryItem[] = [
-  {
-    id: "prh-seed-2",
-    atIso: "2026-01-05T11:00:00.000Z",
-    price: 27000,
-    source: "manual_edit",
-    reason: "시세 반영",
-  },
-  {
-    id: "prh-seed-1",
-    atIso: PRODUCT_SEED_ISO,
-    price: 25000,
-    source: "product_register",
-    reason: "상품 등록 판매가",
-  },
-];
-
 function productStatusLabel(p: InventoryProduct) {
   if (!p.active) return "비활성";
   if (p.stock <= 0) return "품절";
@@ -140,34 +110,6 @@ function stockEventTitle(
   if (source === "manual_adjust") return h.reason?.trim() || "수동조정";
   return stockHistorySourceLabel(source);
 }
-
-function normalizeStockHistory(
-  productId: string | undefined,
-  stockHistory: InventoryStockHistoryItem[] | undefined,
-): InventoryStockHistoryItem[] {
-  const histories = stockHistory ?? [];
-  if (productId !== "prd-sample-1") return histories;
-  if (histories.length === 0) return [SAMPLE_STOCK_HISTORY];
-
-  return histories.map((h) => {
-    const isLegacySample =
-      h.id === "stk-seed-1" &&
-      (!h.vendor || !h.unitPrice || !h.totalAmount || h.source !== "purchase");
-    if (isLegacySample) return SAMPLE_STOCK_HISTORY;
-    return h;
-  });
-}
-
-function normalizePriceHistory(
-  productId: string | undefined,
-  priceHistory: InventoryPriceHistoryItem[] | undefined,
-): InventoryPriceHistoryItem[] {
-  const histories = priceHistory ?? [];
-  if (productId !== "prd-sample-1") return histories;
-  if (histories.length === 0) return SAMPLE_PRICE_HISTORY;
-  return histories;
-}
-
 
 interface StockAdjustDialogProps {
   open: boolean;
@@ -449,19 +391,6 @@ export function ProductsTabPanel() {
   const productDetailErrorMessage = productDetailError
     ? getErrorMessage(productDetailErr)
     : null;
-
-  /** 매출·매입 재고반영 등 — API 목록을 localStorage에 동기화 (해당 탭 API 연동 전) */
-  useEffect(() => {
-    if (products.length === 0) return;
-    try {
-      globalThis.localStorage?.setItem(
-        PRODUCTS_STORAGE_KEY,
-        JSON.stringify(products),
-      );
-    } catch {
-      // ignore
-    }
-  }, [products]);
 
   /** 상세 API 응답 우선 (재고·가격 이력). 로딩 중에는 목록 요약만 표시 */
   const listProduct = useMemo(() => {
