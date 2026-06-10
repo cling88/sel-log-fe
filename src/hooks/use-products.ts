@@ -13,6 +13,7 @@ import {
   applyProductToListCaches,
   createProduct,
   deleteProduct,
+  isDuplicateSkuError,
   fetchProduct,
   fetchProductHistoryTimeline,
   fetchProducts,
@@ -176,6 +177,7 @@ export function useCreateProduct() {
       return created;
     },
     onError: async (error) => {
+      if (isDuplicateSkuError(error)) return;
       await alert(getErrorMessage(error));
     },
   });

@@ -28,7 +28,11 @@ import { PurchaseBankSelectField } from "@/components/ledger/purchase/purchase-b
 import { PurchaseVendorSelectField } from "@/components/ledger/purchase/purchase-vendor-select-field";
 import { useVendors } from "@/hooks/use-vendors";
 import type { VendorSummary } from "@/types/vendor";
-import { Plus, X } from "lucide-react";
+import {
+  ImageUploadModal,
+  type ImageUploadResult,
+} from "@/components/common/image-upload-modal";
+import { ProductImageField } from "@/components/common/product-image-field";
 
 interface ProductPurchaseRegisterDialogProps {
   open: boolean;
@@ -156,12 +160,12 @@ export function ProductPurchaseRegisterDialog({
   const uploadImage = useUploadImage();
   const isEdit = editLine != null;
   const readOnly = Boolean(editLine?.stockReflected);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<ProductPurchaseLineInput>(() =>
     createEmptyProductPurchaseInput(resolvePaymentDate(defaultPaymentDate)),
   );
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [imageModalOpen, setImageModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const formSessionRef = useRef<string | null>(null);
@@ -178,7 +182,7 @@ export function ProductPurchaseRegisterDialog({
     setPendingImageFile(null);
     setForm(createEmptyProductPurchaseInput(resolvePaymentDate(paymentDate)));
     setError(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    setImageModalOpen(false);
   };
 
   useEffect(() => {
@@ -196,6 +200,12 @@ export function ProductPurchaseRegisterDialog({
     if (editLine) {
       setForm(lineToInput(editLine));
       setError(null);
+      setImageModalOpen(false);
+      setPreviewUrl((prev) => {
+        revokePreviewUrl(prev);
+        return "";
+      });
+      setPendingImageFile(null);
       return;
     }
     resetForm(defaultPaymentDate);
@@ -213,25 +223,18 @@ export function ProductPurchaseRegisterDialog({
     });
     setPendingImageFile(null);
     patch({ imageUrl: "" });
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const openImagePicker = () => fileInputRef.current?.click();
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setError("이미지 파일만 업로드할 수 있습니다.");
-      return;
+  const handleImageUploadComplete = (result: ImageUploadResult) => {
+    if (result.type === "file") {
+      setPreviewUrl((prev) => {
+        revokePreviewUrl(prev);
+        return result.previewUrl;
+      });
+      setPendingImageFile(result.file);
+      patch({ imageUrl: "" });
+      setError(null);
     }
-    setPreviewUrl((prev) => {
-      revokePreviewUrl(prev);
-      return URL.createObjectURL(file);
-    });
-    setPendingImageFile(file);
-    patch({ imageUrl: "" });
-    setError(null);
   };
 
   const handleDelete = async () => {
@@ -434,70 +437,14 @@ export function ProductPurchaseRegisterDialog({
               </p>
             ) : null}
 
-            <div className="space-y-2 sm:col-span-2">
+            <div className="space-y-1.5 sm:col-span-2">
               <Label>상품 이미지 (선택)</Label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={handleImageChange}
+              <ProductImageField
+                displayUrl={displayImageUrl}
+                disabled={readOnly}
+                onOpenUpload={() => setImageModalOpen(true)}
+                onClear={clearImage}
               />
-              {displayImageUrl ? (
-                <div
-                  className={cn(
-                    "relative size-24 shrink-0 overflow-hidden rounded-lg",
-                    "border border-[var(--color-border)] bg-[var(--color-bg)]",
-                  )}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={displayImageUrl}
-                    alt="상품 미리보기"
-                    className="size-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={clearImage}
-                    disabled={readOnly}
-                    className={cn(
-                      "absolute top-1 right-1 flex size-6 items-center justify-center",
-                      "rounded-full border border-[var(--color-border)] bg-white/95 shadow-sm",
-                      "text-[var(--color-text-secondary)] transition-colors",
-                      "hover:bg-white hover:text-[var(--color-text-primary)]",
-                      readOnly && "hidden",
-                    )}
-                    aria-label="이미지 삭제"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </div>
-              ) : readOnly ? (
-                <div
-                  className={cn(
-                    "flex size-24 shrink-0 items-center justify-center rounded-lg",
-                    "border border-dashed border-[var(--color-border)]",
-                    "bg-[var(--color-bg)] text-xs text-[var(--color-text-muted)]",
-                  )}
-                >
-                  없음
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={openImagePicker}
-                  className={cn(
-                    "flex size-24 shrink-0 items-center justify-center rounded-lg",
-                    "border border-dashed border-[var(--color-border)]",
-                    "bg-[var(--color-bg)] text-[var(--color-text-muted)]",
-                    "transition-colors hover:border-[var(--color-text-muted)]",
-                    "hover:text-[var(--color-text-secondary)]",
-                  )}
-                  aria-label="이미지 업로드"
-                >
-                  <Plus className="size-7 stroke-[1.5]" />
-                </button>
-              )}
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
@@ -559,6 +506,14 @@ export function ProductPurchaseRegisterDialog({
           </div>
         </DialogFooter>
       </DialogContent>
+
+      <ImageUploadModal
+        open={imageModalOpen}
+        onOpenChange={setImageModalOpen}
+        initialImageUrl={previewUrl || form.imageUrl}
+        confirmMode="defer"
+        onComplete={handleImageUploadComplete}
+      />
     </Dialog>
   );
 }

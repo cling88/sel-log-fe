@@ -151,9 +151,6 @@ export function DashboardPageContent() {
           <h1 className="text-2xl font-semibold text-[var(--color-text-primary)]">
             대시보드
           </h1>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            이번 달 매입·매출·수익과 점검 항목을 확인합니다.
-          </p>
         </div>
         <div className="flex items-center gap-1">
           <Button

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Plus, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ImageUploadModal } from "@/components/common/image-upload-modal";
+import { ProductImageField } from "@/components/common/product-image-field";
 import { LedgerPickerTrigger } from "@/components/ledger/ledger-picker-trigger";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,11 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { MODAL_DIALOG_FOOTER_CLASS } from "@/components/common/modal-footer-classes";
-import {
-  getUploadErrorMessage,
-  uploadImageFile,
-  validateImageFile,
-} from "@/lib/api/upload";
+import { isDuplicateSkuError } from "@/lib/api/products";
 import { formatProductChangeTag } from "@/lib/product-change-labels";
 import { formatAmount } from "@/lib/purchase-product-calc";
 import { cn } from "@/lib/utils";
@@ -90,10 +87,9 @@ export function ProductRegisterDialog({
   const { alert } = useAppDialog();
   const isEdit = !!editProduct;
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
   const [imageError, setImageError] = useState<string | null>(null);
-  const [imageUploading, setImageUploading] = useState(false);
+  const [skuError, setSkuError] = useState<string | null>(null);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
   const [form, setForm] = useState<InventoryProductInput>(() => ({ ...EMPTY_FORM }));
 
   useEffect(() => {
@@ -111,18 +107,18 @@ export function ProductRegisterDialog({
         currentPrice: editProduct.currentPrice ?? 0,
       });
       setImageError(null);
-      setImageUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setSkuError(null);
+      setImageModalOpen(false);
       return;
     }
+    setSkuError(null);
     setForm({
       ...EMPTY_FORM,
       ...(initialForm ?? {}),
       stock: stockReflectRegistration ? 0 : Number(initialForm?.stock) || 0,
     });
     setImageError(null);
-    setImageUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    setImageModalOpen(false);
   }, [open, editProduct, initialForm, stockReflectRegistration]);
 
   useEffect(() => {
@@ -138,32 +134,7 @@ export function ProductRegisterDialog({
 
   const clearImage = () => {
     patch({ imageUrl: "" });
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const openPicker = () => fileInputRef.current?.click();
-
-  const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const validation = validateImageFile(file);
-    if (validation) {
-      setImageError(validation);
-      return;
-    }
-
-    setImageUploading(true);
     setImageError(null);
-    try {
-      const uploaded = await uploadImageFile(file);
-      patch({ imageUrl: uploaded.url });
-    } catch (error) {
-      setImageError(getUploadErrorMessage(error));
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    } finally {
-      setImageUploading(false);
-    }
   };
 
   const submit = async () => {
@@ -177,10 +148,6 @@ export function ProductRegisterDialog({
       await alert("판매가를 입력해 주세요.");
       return;
     }
-    if (imageUploading) {
-      await alert("이미지 업로드가 끝난 뒤 저장해 주세요.");
-      return;
-    }
     const input: InventoryProductInput = {
       ...form,
       sku: isEdit && editProduct ? editProduct.sku : sku,
@@ -192,16 +159,29 @@ export function ProductRegisterDialog({
       currentPrice: Math.max(0, Number(form.currentPrice) || 0),
       imageUrl: form.imageUrl?.trim() || "",
     };
-    const saved = await onSave(input);
-    onOpenChange(false);
-    if (suppressSuccessAlert) return;
-    if (isEdit) {
-      const tag = formatProductChangeTag(saved?.changeKind, saved?.changeFrom);
-      await alert(
-        tag ? `상품이 저장되었습니다.\n(${tag})` : "상품이 저장되었습니다.",
-      );
-    } else {
-      await alert("상품이 등록되었습니다.");
+    try {
+      const saved = await onSave(input);
+      onOpenChange(false);
+      if (suppressSuccessAlert) return;
+      if (isEdit) {
+        const tag = formatProductChangeTag(saved?.changeKind, saved?.changeFrom);
+        await alert(
+          tag ? `상품이 저장되었습니다.\n(${tag})` : "상품이 저장되었습니다.",
+        );
+      } else {
+        await alert("상품이 등록되었습니다.");
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "상품 저장에 실패했습니다.";
+      if (!isEdit && isDuplicateSkuError(error)) {
+        setSkuError(message);
+        if (stockReflectRegistration) {
+          await alert(message);
+        }
+        return;
+      }
+      await alert(message);
     }
   };
 
@@ -240,19 +220,26 @@ export function ProductRegisterDialog({
               <Input
                 id="p-sku"
                 value={form.sku}
-                onChange={(e) => patch({ sku: e.target.value })}
+                onChange={(e) => {
+                  setSkuError(null);
+                  patch({ sku: e.target.value });
+                }}
                 placeholder={
                   isEdit ? undefined : "종류-컬러-번호 (예: 티셔츠-블랙-001)"
                 }
                 readOnly={isEdit}
                 disabled={isEdit}
                 aria-readonly={isEdit}
+                aria-invalid={!!skuError}
                 className={
                   isEdit
                     ? "cursor-not-allowed border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text-secondary)]"
                     : undefined
                 }
               />
+              {skuError ? (
+                <p className="text-xs text-[var(--color-danger)]">{skuError}</p>
+              ) : null}
               {isEdit ? (
                 <p className="text-xs text-[var(--color-text-muted)]">
                   매입·매출·재고 이력과 연결된 식별자라 수정할 수 없습니다.
@@ -371,65 +358,15 @@ export function ProductRegisterDialog({
               </div>
             </div>
 
-            <div className="space-y-2 sm:col-span-2">
+            <div className="space-y-1.5 sm:col-span-2">
               <Label>상품 이미지 (선택)</Label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={handleImageChange}
+              <ProductImageField
+                displayUrl={form.imageUrl ?? ""}
+                disabled={saving}
+                error={imageError}
+                onOpenUpload={() => setImageModalOpen(true)}
+                onClear={clearImage}
               />
-
-              {imageUploading ? (
-                <div className="flex size-24 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] text-xs text-[var(--color-text-muted)]">
-                  업로드 중...
-                </div>
-              ) : form.imageUrl ? (
-                <div className="relative size-24 shrink-0 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={form.imageUrl}
-                    alt="상품 미리보기"
-                    className="size-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={clearImage}
-                    disabled={saving}
-                    className={cn(
-                      "absolute top-1 right-1 flex size-6 items-center justify-center rounded-full border border-[var(--color-border)] bg-white/95 shadow-sm",
-                      "transition-colors hover:bg-white hover:text-[var(--color-text-primary)]",
-                    )}
-                    aria-label="이미지 삭제"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={openPicker}
-                  disabled={saving || imageUploading}
-                  className={cn(
-                    "flex size-24 shrink-0 items-center justify-center rounded-lg border border-dashed",
-                    "border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text-muted)]",
-                    "transition-colors hover:border-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]",
-                    "disabled:cursor-not-allowed disabled:opacity-60",
-                  )}
-                  aria-label="이미지 업로드"
-                >
-                  <Plus className="size-7 stroke-[1.5]" />
-                </button>
-              )}
-
-              {imageError ? (
-                <p className="text-xs text-[var(--color-danger)]">{imageError}</p>
-              ) : (
-                <p className="text-xs text-[var(--color-text-secondary)]">
-                  JPG, PNG 등 · 업로드 후 공개 URL이 상품에 저장됩니다
-                </p>
-              )}
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
@@ -498,12 +435,25 @@ export function ProductRegisterDialog({
           <Button
             type="button"
             onClick={() => void submit()}
-            disabled={saving || imageUploading}
+            disabled={saving}
           >
             {saving ? "처리 중..." : isEdit ? "저장" : "등록"}
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <ImageUploadModal
+        open={imageModalOpen}
+        onOpenChange={setImageModalOpen}
+        initialImageUrl={form.imageUrl ?? ""}
+        confirmMode="immediate"
+        onComplete={(result) => {
+          if (result.type === "url") {
+            patch({ imageUrl: result.url });
+            setImageError(null);
+          }
+        }}
+      />
     </Dialog>
   );
 }
