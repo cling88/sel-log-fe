@@ -21,6 +21,9 @@ interface LedgerExcelDownloadActionsProps {
 
 type DownloadKey = LedgerPeriodExportMode | ProductExportScope;
 
+const EXCEL_BUTTON_CLASS =
+  "h-[26px] border-white/15 bg-white/10 px-2 text-[11px] text-white/70 shadow-none hover:border-white/25 hover:bg-white/15 hover:text-white disabled:opacity-50";
+
 export function LedgerExcelDownloadActions({
   tabId,
 }: LedgerExcelDownloadActionsProps) {
@@ -60,13 +63,13 @@ export function LedgerExcelDownloadActions({
   const busy = downloading !== null;
 
   return (
-    <div className="flex shrink-0 items-center gap-1.5 pb-0.5 sm:gap-2">
+    <div className="flex shrink-0 items-center gap-1.5 pb-0.5 sm:gap-2 translate-y-[-12%]">
       <Button
         type="button"
         variant="outline"
         size="sm"
         disabled={busy}
-        className="h-[26px] border-[var(--color-border)] bg-white px-2 text-[11px] shadow-none"
+        className={EXCEL_BUTTON_CLASS}
         onClick={() => void handleDownload(firstKey)}
       >
         <FileSpreadsheet className="mr-1 size-3 shrink-0" />
@@ -79,7 +82,7 @@ export function LedgerExcelDownloadActions({
         variant="outline"
         size="sm"
         disabled={busy}
-        className="h-[26px] border-[var(--color-border)] bg-white px-2 text-[11px] shadow-none"
+        className={EXCEL_BUTTON_CLASS}
         onClick={() => void handleDownload(secondKey)}
       >
         <FileSpreadsheet className="mr-1 size-3 shrink-0" />

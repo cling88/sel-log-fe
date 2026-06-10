@@ -13,7 +13,6 @@ import {
   applyProductToListCaches,
   createProduct,
   deleteProduct,
-  isDuplicateSkuError,
   fetchProduct,
   fetchProductHistoryTimeline,
   fetchProducts,
@@ -176,10 +175,6 @@ export function useCreateProduct() {
       });
       return created;
     },
-    onError: async (error) => {
-      if (isDuplicateSkuError(error)) return;
-      await alert(getErrorMessage(error));
-    },
   });
 }
 
@@ -201,9 +196,6 @@ export function useUpdateProduct() {
       void queryClient.refetchQueries({
         queryKey: productDetailQueryKey(updated.id),
       });
-    },
-    onError: async (error) => {
-      await alert(getErrorMessage(error));
     },
   });
 }

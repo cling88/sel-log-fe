@@ -8,16 +8,23 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import {
+  CircleHelp,
+  CircleX,
+  Info,
+  Trash2,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { MODAL_DIALOG_FOOTER_CLASS } from "@/components/common/modal-footer-classes";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 export interface AppConfirmOptions {
   title?: string;
@@ -38,12 +45,40 @@ type Pending =
   | { kind: "alert"; resolve: () => void }
   | { kind: "confirm"; resolve: (value: boolean) => void };
 
+const APP_CONFIRM_FOOTER_CLASS =
+  "mx-0 mb-0 shrink-0 flex-col-reverse gap-2 border-t border-[var(--color-border)] px-5 py-2 sm:flex-row sm:justify-end";
+
 export function useAppDialog(): AppDialogContextValue {
   const ctx = useContext(AppDialogContext);
   if (!ctx) {
     throw new Error("useAppDialog must be used within AppDialogProvider");
   }
   return ctx;
+}
+
+const DIALOG_ICON_CLASS = "text-[var(--color-text-primary)]";
+
+function resolveTitleIcon(options: {
+  title: string;
+  kind: "alert" | "confirm";
+  destructive: boolean;
+}): { Icon: LucideIcon; className: string } {
+  const title = options.title.trim();
+
+  if (title.includes("에러") || title.includes("오류")) {
+    return { Icon: CircleX, className: "text-[var(--color-danger)]" };
+  }
+  if (options.destructive || title.includes("삭제")) {
+    return { Icon: Trash2, className: DIALOG_ICON_CLASS };
+  }
+  if (title.includes("경고") || title.includes("주의")) {
+    return { Icon: TriangleAlert, className: DIALOG_ICON_CLASS };
+  }
+  if (options.kind === "confirm") {
+    return { Icon: CircleHelp, className: DIALOG_ICON_CLASS };
+  }
+
+  return { Icon: Info, className: DIALOG_ICON_CLASS };
 }
 
 export function AppDialogProvider({ children }: { children: ReactNode }) {
@@ -90,6 +125,10 @@ export function AppDialogProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const titleIcon = resolveTitleIcon({ title, kind, destructive });
+  const TitleIcon = titleIcon.Icon;
+  const accessibleTitle = kind === "confirm" && title !== "확인" ? title : message;
+
   return (
     <AppDialogContext.Provider value={{ alert, confirm }}>
       {children}
@@ -100,36 +139,44 @@ export function AppDialogProvider({ children }: { children: ReactNode }) {
         }}
       >
         <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-sm">
-          <DialogHeader className="border-b border-[var(--color-border)] px-5 py-4 pb-5">
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription className="text-[var(--color-text-primary)]">
+          <DialogTitle className="sr-only">{accessibleTitle}</DialogTitle>
+
+          <div
+            className={cn(
+              "px-5 py-5 text-center",
+              kind === "alert" ? "pb-6" : "pb-4",
+            )}
+          >
+            <TitleIcon
+              className={cn(
+                "mx-auto mb-3 size-[21px] shrink-0",
+                titleIcon.className,
+              )}
+              aria-hidden
+            />
+            <DialogDescription className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--color-text-primary)]">
               {message}
             </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className={MODAL_DIALOG_FOOTER_CLASS}>
-            {kind === "confirm" ? (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => finish(false)}
-                >
-                  {cancelLabel}
-                </Button>
-                <Button
-                  type="button"
-                  variant={destructive ? "destructive" : "default"}
-                  onClick={() => finish(true)}
-                >
-                  {confirmLabel}
-                </Button>
-              </>
-            ) : (
-              <Button type="button" onClick={() => finish(true)}>
+          </div>
+
+          {kind === "confirm" ? (
+            <DialogFooter className={APP_CONFIRM_FOOTER_CLASS}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => finish(false)}
+              >
+                {cancelLabel}
+              </Button>
+              <Button
+                type="button"
+                variant={destructive ? "destructive" : "default"}
+                onClick={() => finish(true)}
+              >
                 {confirmLabel}
               </Button>
-            )}
-          </DialogFooter>
+            </DialogFooter>
+          ) : null}
         </DialogContent>
       </Dialog>
     </AppDialogContext.Provider>

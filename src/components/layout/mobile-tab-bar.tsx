@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const tabs = [
   { href: "/dashboard", label: "대시보드" },
   { href: "/ledger", label: "장부" },
+  { href: "/sourcing", label: "소싱" },
   { href: "/settings", label: "설정" },
 ] as const;
 

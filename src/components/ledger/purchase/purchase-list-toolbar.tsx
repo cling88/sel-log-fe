@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,8 @@ interface PurchaseListToolbarProps {
   searchPlaceholder?: string;
   registerLabel?: string;
   onRegister?: () => void;
+  /** 검색·등록 버튼 옆 추가 액션 (엑셀 등) */
+  endContent?: ReactNode;
   /** 목록 카드 상단에 붙일 때 true */
   embedded?: boolean;
   className?: string;
@@ -30,6 +33,7 @@ export function PurchaseListToolbar({
   searchPlaceholder = "그룹명, 항목명, 구매처 검색",
   registerLabel,
   onRegister,
+  endContent,
   embedded = false,
   className,
 }: PurchaseListToolbarProps) {
@@ -85,6 +89,7 @@ export function PurchaseListToolbar({
         ) : null}
       </div>
       <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:shrink-0 sm:justify-end">
+        {endContent}
         {registerLabel && onRegister ? (
           <Button
             type="button"

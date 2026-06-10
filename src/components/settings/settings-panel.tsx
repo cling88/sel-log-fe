@@ -1,18 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SaleChannelSelectField } from "@/components/ledger/sale/sale-channel-select-field";
 import { useAuthUser } from "@/hooks/use-auth-user";
-import { useSalesChannels } from "@/hooks/use-sales-channels";
 import { useUserSettings } from "@/hooks/use-settings";
 import {
   feeRateToPercentInput,
@@ -32,22 +25,12 @@ export function SettingsPanel() {
   const authUser = useAuthUser();
   const { settings, isLoading, errorMessage, updateSettings, isSaving } =
     useUserSettings();
-  const { channels, isLoading: channelsLoading } = useSalesChannels();
-
   const [marginMinPercent, setMarginMinPercent] = useState("");
   const [marginMaxPercent, setMarginMaxPercent] = useState("");
   const [vatPercent, setVatPercent] = useState("");
   const [defaultFeePercent, setDefaultFeePercent] = useState("");
   const [defaultChannelId, setDefaultChannelId] = useState<string>("none");
   const [saved, setSaved] = useState(false);
-
-  const defaultChannelItems = useMemo(
-    () => [
-      { label: "선택 안 함", value: "none" },
-      ...channels.map((ch) => ({ label: ch.name, value: ch.id })),
-    ],
-    [channels],
-  );
 
   useEffect(() => {
     setMarginMinPercent(percentToInput(settings.marginMinRate));
@@ -198,27 +181,11 @@ export function SettingsPanel() {
             매출 기본값
           </h2>
         </div>
-        <div className="space-y-1.5">
-          <Label>기본 판매채널</Label>
-          <Select
-            value={defaultChannelId}
-            onValueChange={(value) => setDefaultChannelId(value ?? "none")}
-            items={defaultChannelItems}
-            disabled={channelsLoading}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="선택 안 함" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">선택 안 함</SelectItem>
-              {channels.map((ch) => (
-                <SelectItem key={ch.id} value={ch.id}>
-                  {ch.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <SaleChannelSelectField
+          label="기본 판매채널"
+          channelId={defaultChannelId === "none" ? null : defaultChannelId}
+          onChannelIdChange={(id) => setDefaultChannelId(id ?? "none")}
+        />
       </section>
 
       <div className="flex items-center gap-3">

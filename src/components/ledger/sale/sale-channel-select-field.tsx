@@ -13,6 +13,7 @@ interface SaleChannelSelectFieldProps {
   onChannelIdChange: (channelId: string | null) => void;
   /** API `channel` 스냅샷 (목록에 없을 때 표시용) */
   channelSnapshot?: SalesChannelSummary | null;
+  label?: string;
   className?: string;
   labelClassName?: string;
   disabled?: boolean;
@@ -22,6 +23,7 @@ export function SaleChannelSelectField({
   channelId,
   onChannelIdChange,
   channelSnapshot,
+  label = "판매채널",
   className,
   labelClassName,
   disabled = false,
@@ -59,7 +61,7 @@ export function SaleChannelSelectField({
       <LedgerPickerTrigger
         className={cn(className)}
         labelClassName={labelClassName}
-        label="판매채널"
+        label={label}
         displayValue={displayLabel}
         isEmpty={displayLabel === "선택"}
         disabled={disabled}

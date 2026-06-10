@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ExternalLink, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,57 +13,56 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { MODAL_DIALOG_FOOTER_CLASS } from "@/components/common/modal-footer-classes";
-import { formatVendorLabel, isHttpUrl } from "@/lib/vendor-label";
-import type { Vendor, VendorInput } from "@/types/vendor";
+import { SourcingExternalLink } from "@/components/sourcing/sourcing-external-link";
+import { isHttpUrl } from "@/lib/vendor-label";
+import type { SourcingChannel, SourcingChannelInput } from "@/types/sourcing";
 
-const EMPTY_INPUT: VendorInput = {
-  name: "",
-  link: "",
-};
+const CHANNEL_MEMO_MAX = 2000;
 
-function isValidInput(input: VendorInput): boolean {
+const EMPTY_INPUT: SourcingChannelInput = { name: "", url: "", memo: "" };
+
+function isValidInput(input: SourcingChannelInput): boolean {
   const name = input.name.trim();
   if (!name) return false;
-  const link = input.link?.trim() ?? "";
-  if (link && !isHttpUrl(link)) return false;
-  return true;
+  const url = input.url?.trim() ?? "";
+  if (url && !isHttpUrl(url)) return false;
+  return (input.memo?.length ?? 0) <= CHANNEL_MEMO_MAX;
 }
 
-export interface VendorManageDialogProps {
+export interface SourcingChannelManageDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  vendors: Vendor[];
-  selectedVendorId?: string | null;
-  loading?: boolean;
-  loadError?: string | null;
+  channels: SourcingChannel[];
+  selectedChannelId?: string | null;
   mutating?: boolean;
-  required?: boolean;
+  productCountByChannelId?: (channelId: string) => number;
   onSelect: (id: string) => void | Promise<void>;
   onClear?: () => void | Promise<void>;
-  onCreate: (body: VendorInput) => void | Promise<void>;
-  onUpdate: (id: string, body: VendorInput) => void | Promise<void>;
+  onCreate: (body: SourcingChannelInput) => void | Promise<void>;
+  onUpdate: (id: string, body: SourcingChannelInput) => void | Promise<void>;
   onDelete: (id: string) => void | Promise<void>;
 }
 
-export function VendorManageDialog({
+export function SourcingChannelManageDialog({
   open,
   onOpenChange,
-  vendors,
-  selectedVendorId,
-  loading = false,
-  loadError = null,
+  channels,
+  selectedChannelId,
   mutating = false,
-  required = false,
+  productCountByChannelId,
   onSelect,
   onClear,
   onCreate,
   onUpdate,
   onDelete,
-}: VendorManageDialogProps) {
-  const [newInput, setNewInput] = useState<VendorInput>(EMPTY_INPUT);
+}: SourcingChannelManageDialogProps) {
+  const [newInput, setNewInput] = useState<SourcingChannelInput>(EMPTY_INPUT);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingInput, setEditingInput] = useState<VendorInput>(EMPTY_INPUT);
+  const [editingInput, setEditingInput] = useState<SourcingChannelInput>(
+    EMPTY_INPUT,
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -76,16 +75,18 @@ export function VendorManageDialog({
     if (!isValidInput(newInput)) return;
     await onCreate({
       name: newInput.name.trim(),
-      link: newInput.link?.trim() ?? "",
+      url: newInput.url?.trim() ?? "",
+      memo: newInput.memo?.trim() ?? "",
     });
     setNewInput(EMPTY_INPUT);
   };
 
-  const handleStartEdit = (vendor: Vendor) => {
-    setEditingId(vendor.id);
+  const handleStartEdit = (channel: SourcingChannel) => {
+    setEditingId(channel.id);
     setEditingInput({
-      name: vendor.name,
-      link: vendor.link,
+      name: channel.name,
+      url: channel.url ?? "",
+      memo: channel.memo,
     });
   };
 
@@ -93,7 +94,8 @@ export function VendorManageDialog({
     if (!editingId || !isValidInput(editingInput)) return;
     await onUpdate(editingId, {
       name: editingInput.name.trim(),
-      link: editingInput.link?.trim() ?? "",
+      url: editingInput.url?.trim() ?? "",
+      memo: editingInput.memo?.trim() ?? "",
     });
     setEditingId(null);
     setEditingInput(EMPTY_INPUT);
@@ -115,90 +117,93 @@ export function VendorManageDialog({
         aria-describedby={undefined}
       >
         <DialogHeader className="border-b border-[var(--color-border)] px-5 py-4">
-          <DialogTitle>구매처 선택</DialogTitle>
+          <DialogTitle>소싱 채널 선택</DialogTitle>
           <DialogDescription>
-            구매처를 등록·선택합니다. 링크는 쇼핑몰·도매 사이트 URL을 넣을 수
-            있습니다.
+            소싱처를 등록·선택합니다. 상호명과 URL 조합이 같으면 중복 등록할 수
+            없습니다.
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <div className="space-y-4">
-            {loadError ? (
-              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {loadError}
-              </p>
-            ) : null}
-
             <div className="relative rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]/50 p-3">
               <p className="absolute top-3 right-3 text-xs font-bold text-[var(--color-text-secondary)]">
-                구매처 추가
+                채널 추가
               </p>
               <div className="grid gap-2">
                 <div className="space-y-1 pr-16">
-                  <Label htmlFor="vendor-new-name" className="text-xs">
-                    구매처명 <span className="text-[var(--color-danger)]">*</span>
+                  <Label htmlFor="sourcing-channel-new-name" className="text-xs">
+                    상호명 <span className="text-[var(--color-danger)]">*</span>
                   </Label>
                   <Input
-                    id="vendor-new-name"
+                    id="sourcing-channel-new-name"
                     value={newInput.name}
+                    disabled={mutating}
                     onChange={(e) =>
                       setNewInput((prev) => ({ ...prev, name: e.target.value }))
                     }
                     placeholder="도매몰A"
-                    disabled={loading || mutating}
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="vendor-new-link" className="text-xs">
-                    링크 (선택)
+                  <Label htmlFor="sourcing-channel-new-url" className="text-xs">
+                    URL
                   </Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="vendor-new-link"
-                      className="min-w-0 flex-1"
-                      value={newInput.link ?? ""}
+                  <Input
+                    id="sourcing-channel-new-url"
+                    value={newInput.url ?? ""}
+                    disabled={mutating}
+                    onChange={(e) =>
+                      setNewInput((prev) => ({ ...prev, url: e.target.value }))
+                    }
+                    placeholder="https://"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="sourcing-channel-new-memo" className="text-xs">
+                    메모
+                  </Label>
+                  <div className="flex items-start gap-2">
+                    <Textarea
+                      id="sourcing-channel-new-memo"
+                      rows={2}
+                      maxLength={CHANNEL_MEMO_MAX}
+                      className="min-w-0 flex-1 resize-y"
+                      value={newInput.memo ?? ""}
+                      disabled={mutating}
                       onChange={(e) =>
-                        setNewInput((prev) => ({
-                          ...prev,
-                          link: e.target.value,
-                        }))
+                        setNewInput((prev) => ({ ...prev, memo: e.target.value }))
                       }
-                      placeholder="https://"
-                      disabled={loading || mutating}
+                      placeholder="연락처, MOQ, 배송 조건 등"
                     />
                     <Button
                       type="button"
                       size="sm"
-                      className="h-8 shrink-0"
-                      disabled={loading || mutating || !isValidInput(newInput)}
+                      className="h-8 shrink-0 self-end"
+                      disabled={mutating || !isValidInput(newInput)}
                       onClick={() => void handleCreate()}
                     >
-                      + 구매처 추가
+                      + 채널 추가
                     </Button>
                   </div>
                 </div>
               </div>
             </div>
 
-            {loading ? (
-              <p className="py-6 text-center text-sm text-[var(--color-text-muted)]">
-                구매처 불러오는 중...
-              </p>
-            ) : vendors.length === 0 ? (
+            {channels.length === 0 ? (
               <p className="py-4 text-sm text-[var(--color-text-muted)]">
-                등록된 구매처가 없습니다. 위에서 추가해 주세요.
+                등록된 소싱 채널이 없습니다. 위에서 추가해 주세요.
               </p>
             ) : (
               <ul className="flex flex-col gap-2">
-                {vendors.map((vendor) => {
-                  const isEditing = editingId === vendor.id;
-                  const isSelected = selectedVendorId === vendor.id;
-                  const link = vendor.link?.trim();
-                  const hasLink = link && isHttpUrl(link);
+                {channels.map((channel) => {
+                  const isEditing = editingId === channel.id;
+                  const isSelected = selectedChannelId === channel.id;
+                  const productCount = productCountByChannelId?.(channel.id) ?? 0;
+
                   return (
                     <li
-                      key={vendor.id}
+                      key={channel.id}
                       className="rounded-lg border border-[var(--color-border)] bg-white px-3 py-2"
                     >
                       {isEditing ? (
@@ -211,17 +216,30 @@ export function VendorManageDialog({
                                 name: e.target.value,
                               }))
                             }
-                            placeholder="구매처명"
+                            placeholder="상호명"
                           />
                           <Input
-                            value={editingInput.link ?? ""}
+                            value={editingInput.url ?? ""}
                             onChange={(e) =>
                               setEditingInput((prev) => ({
                                 ...prev,
-                                link: e.target.value,
+                                url: e.target.value,
                               }))
                             }
                             placeholder="https://"
+                          />
+                          <Textarea
+                            rows={2}
+                            maxLength={CHANNEL_MEMO_MAX}
+                            value={editingInput.memo ?? ""}
+                            onChange={(e) =>
+                              setEditingInput((prev) => ({
+                                ...prev,
+                                memo: e.target.value,
+                              }))
+                            }
+                            placeholder="메모"
+                            className="resize-y"
                           />
                           <div className="flex justify-end gap-2">
                             <Button
@@ -248,28 +266,32 @@ export function VendorManageDialog({
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium text-[var(--color-text-primary)]">
-                              {formatVendorLabel(vendor)}
+                              {channel.name}
                             </p>
-                            {hasLink ? (
-                              <a
-                                href={link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mt-0.5 inline-flex max-w-full items-center gap-1 truncate text-xs text-[var(--primary-600)] hover:underline"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <ExternalLink className="size-3 shrink-0" />
-                                <span className="truncate">{link}</span>
-                              </a>
+                            <SourcingExternalLink
+                              href={channel.url ?? ""}
+                              className="mt-0.5"
+                            />
+                            {channel.memo ? (
+                              <p className="mt-1 line-clamp-2 text-xs text-[var(--color-text-muted)]">
+                                {channel.memo}
+                              </p>
                             ) : null}
-                            {isSelected ? (
-                              <span className="mt-1 inline-flex rounded-full bg-[var(--primary-50)] px-2 py-0.5 text-[10px] font-medium text-[var(--primary-600)]">
-                                선택됨
-                              </span>
-                            ) : null}
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              {isSelected ? (
+                                <span className="inline-flex rounded-full bg-[var(--primary-50)] px-2 py-0.5 text-[10px] font-medium text-[var(--primary-600)]">
+                                  선택됨
+                                </span>
+                              ) : null}
+                              {productCount > 0 ? (
+                                <span className="inline-flex rounded-full bg-[var(--color-bg)] px-2 py-0.5 text-[10px] text-[var(--color-text-muted)]">
+                                  제품 {productCount}건
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
                           <div className="flex shrink-0 items-center gap-1.5">
                             <Button
@@ -277,7 +299,7 @@ export function VendorManageDialog({
                               size="sm"
                               className="h-8"
                               disabled={mutating}
-                              onClick={() => void onSelect(vendor.id)}
+                              onClick={() => void onSelect(channel.id)}
                             >
                               선택
                             </Button>
@@ -287,8 +309,8 @@ export function VendorManageDialog({
                               size="icon-sm"
                               className="h-8 w-8"
                               disabled={mutating}
-                              onClick={() => handleStartEdit(vendor)}
-                              aria-label="구매처 수정"
+                              onClick={() => handleStartEdit(channel)}
+                              aria-label="채널 수정"
                             >
                               <Pencil className="size-4" />
                             </Button>
@@ -298,8 +320,8 @@ export function VendorManageDialog({
                               size="icon-sm"
                               className="h-8 w-8"
                               disabled={mutating}
-                              onClick={() => void handleDelete(vendor.id)}
-                              aria-label="구매처 삭제"
+                              onClick={() => void handleDelete(channel.id)}
+                              aria-label="채널 삭제"
                             >
                               <Trash2 className="size-4" />
                             </Button>
@@ -315,7 +337,7 @@ export function VendorManageDialog({
         </div>
 
         <DialogFooter className={MODAL_DIALOG_FOOTER_CLASS}>
-          {onClear && selectedVendorId && !required ? (
+          {onClear && selectedChannelId ? (
             <Button
               type="button"
               variant="ghost"
