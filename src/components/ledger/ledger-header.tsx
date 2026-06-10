@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { LedgerExcelDownloadActions } from "@/components/ledger/ledger-excel-download-actions";
 import { LedgerYearPicker } from "@/components/ledger/ledger-year-picker";
 import { useLedgerSummary } from "@/hooks/use-ledger-summary";
 import { getLedgerErrorMessage } from "@/lib/api/ledger";
@@ -189,30 +190,33 @@ export function LedgerHeader() {
         <LedgerYearPicker interactive={isMonthScopedLedgerTab(activeTab)} />
       </div>
 
-      <nav className="flex gap-4 bg-[var(--primary-900)] px-4 pb-0 pt-2 sm:px-6">
-        {ledgerTabs.map((tab) => {
-          const active = tab.id === activeTab;
-          const href = buildLedgerHref(pathname, searchParams, (params) => {
-            applyLedgerTabParams(params, tab.id);
-          });
-          return (
-            <Link
-              key={tab.id}
-              href={href}
-              replace
-              scroll={false}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors",
-                active
-                  ? "border-white text-white"
-                  : "border-transparent text-white/50 hover:text-white/80",
-              )}
-            >
-              {tab.label}
-            </Link>
-          );
-        })}
+      <nav className="flex items-end justify-between gap-3 bg-[var(--primary-900)] px-4 pb-0 pt-2 sm:px-6">
+        <div className="flex min-w-0 gap-4 overflow-x-auto">
+          {ledgerTabs.map((tab) => {
+            const active = tab.id === activeTab;
+            const href = buildLedgerHref(pathname, searchParams, (params) => {
+              applyLedgerTabParams(params, tab.id);
+            });
+            return (
+              <Link
+                key={tab.id}
+                href={href}
+                replace
+                scroll={false}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "shrink-0 border-b-2 px-1 pb-2.5 text-sm font-medium transition-colors",
+                  active
+                    ? "border-white text-white"
+                    : "border-transparent text-white/50 hover:text-white/80",
+                )}
+              >
+                {tab.label}
+              </Link>
+            );
+          })}
+        </div>
+        <LedgerExcelDownloadActions tabId={activeTab} />
       </nav>
     </div>
   );

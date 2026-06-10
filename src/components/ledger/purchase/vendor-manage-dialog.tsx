@@ -130,12 +130,12 @@ export function VendorManageDialog({
               </p>
             ) : null}
 
-            <div className="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]/50 p-3">
-              <p className="text-xs font-medium text-[var(--color-text-secondary)]">
+            <div className="relative rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]/50 p-3">
+              <p className="absolute top-3 right-3 text-xs font-bold text-[var(--color-text-secondary)]">
                 구매처 추가
               </p>
               <div className="grid gap-2">
-                <div className="space-y-1">
+                <div className="space-y-1 pr-16">
                   <Label htmlFor="vendor-new-name" className="text-xs">
                     구매처명 <span className="text-[var(--color-danger)]">*</span>
                   </Label>
@@ -153,26 +153,32 @@ export function VendorManageDialog({
                   <Label htmlFor="vendor-new-link" className="text-xs">
                     링크 (선택)
                   </Label>
-                  <Input
-                    id="vendor-new-link"
-                    value={newInput.link ?? ""}
-                    onChange={(e) =>
-                      setNewInput((prev) => ({ ...prev, link: e.target.value }))
-                    }
-                    placeholder="https://"
-                    disabled={loading || mutating}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="vendor-new-link"
+                      className="min-w-0 flex-1"
+                      value={newInput.link ?? ""}
+                      onChange={(e) =>
+                        setNewInput((prev) => ({
+                          ...prev,
+                          link: e.target.value,
+                        }))
+                      }
+                      placeholder="https://"
+                      disabled={loading || mutating}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 shrink-0"
+                      disabled={loading || mutating || !isValidInput(newInput)}
+                      onClick={() => void handleCreate()}
+                    >
+                      + 구매처 추가
+                    </Button>
+                  </div>
                 </div>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                className="h-8"
-                disabled={loading || mutating || !isValidInput(newInput)}
-                onClick={() => void handleCreate()}
-              >
-                + 구매처 추가
-              </Button>
             </div>
 
             {loading ? (
@@ -242,7 +248,7 @@ export function VendorManageDialog({
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium text-[var(--color-text-primary)]">
                               {formatVendorLabel(vendor)}
