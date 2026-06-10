@@ -27,6 +27,7 @@ import {
   uploadImageFile,
   validateImageFile,
 } from "@/lib/api/upload";
+import { isDuplicateSkuError } from "@/lib/api/products";
 import { formatProductChangeTag } from "@/lib/product-change-labels";
 import { formatAmount } from "@/lib/purchase-product-calc";
 import { cn } from "@/lib/utils";
@@ -93,6 +94,7 @@ export function ProductRegisterDialog({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [imageError, setImageError] = useState<string | null>(null);
+  const [skuError, setSkuError] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [form, setForm] = useState<InventoryProductInput>(() => ({ ...EMPTY_FORM }));
 
@@ -111,10 +113,12 @@ export function ProductRegisterDialog({
         currentPrice: editProduct.currentPrice ?? 0,
       });
       setImageError(null);
+      setSkuError(null);
       setImageUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
+    setSkuError(null);
     setForm({
       ...EMPTY_FORM,
       ...(initialForm ?? {}),
@@ -192,16 +196,29 @@ export function ProductRegisterDialog({
       currentPrice: Math.max(0, Number(form.currentPrice) || 0),
       imageUrl: form.imageUrl?.trim() || "",
     };
-    const saved = await onSave(input);
-    onOpenChange(false);
-    if (suppressSuccessAlert) return;
-    if (isEdit) {
-      const tag = formatProductChangeTag(saved?.changeKind, saved?.changeFrom);
-      await alert(
-        tag ? `상품이 저장되었습니다.\n(${tag})` : "상품이 저장되었습니다.",
-      );
-    } else {
-      await alert("상품이 등록되었습니다.");
+    try {
+      const saved = await onSave(input);
+      onOpenChange(false);
+      if (suppressSuccessAlert) return;
+      if (isEdit) {
+        const tag = formatProductChangeTag(saved?.changeKind, saved?.changeFrom);
+        await alert(
+          tag ? `상품이 저장되었습니다.\n(${tag})` : "상품이 저장되었습니다.",
+        );
+      } else {
+        await alert("상품이 등록되었습니다.");
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "상품 저장에 실패했습니다.";
+      if (!isEdit && isDuplicateSkuError(error)) {
+        setSkuError(message);
+        if (stockReflectRegistration) {
+          await alert(message);
+        }
+        return;
+      }
+      await alert(message);
     }
   };
 
@@ -240,19 +257,26 @@ export function ProductRegisterDialog({
               <Input
                 id="p-sku"
                 value={form.sku}
-                onChange={(e) => patch({ sku: e.target.value })}
+                onChange={(e) => {
+                  setSkuError(null);
+                  patch({ sku: e.target.value });
+                }}
                 placeholder={
                   isEdit ? undefined : "종류-컬러-번호 (예: 티셔츠-블랙-001)"
                 }
                 readOnly={isEdit}
                 disabled={isEdit}
                 aria-readonly={isEdit}
+                aria-invalid={!!skuError}
                 className={
                   isEdit
                     ? "cursor-not-allowed border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text-secondary)]"
                     : undefined
                 }
               />
+              {skuError ? (
+                <p className="text-xs text-[var(--color-danger)]">{skuError}</p>
+              ) : null}
               {isEdit ? (
                 <p className="text-xs text-[var(--color-text-muted)]">
                   매입·매출·재고 이력과 연결된 식별자라 수정할 수 없습니다.

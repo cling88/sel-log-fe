@@ -7,11 +7,13 @@ import {
 
 export class ApiError extends Error {
   status: number;
+  code?: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    if (code) this.code = code;
   }
 }
 
@@ -108,7 +110,11 @@ export async function apiFetch<T>(
   }
 
   if (!res.ok) {
-    throw new ApiError(res.status, resolveErrorMessage(body, res.status));
+    throw new ApiError(
+      res.status,
+      resolveErrorMessage(body, res.status),
+      body?.error?.code,
+    );
   }
 
   return body as T;
@@ -163,7 +169,11 @@ export async function apiFetchFormData<T>(
   }
 
   if (!res.ok) {
-    throw new ApiError(res.status, resolveErrorMessage(body, res.status));
+    throw new ApiError(
+      res.status,
+      resolveErrorMessage(body, res.status),
+      body?.error?.code,
+    );
   }
 
   return body as T;

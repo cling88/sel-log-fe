@@ -18,6 +18,14 @@ import type {
   ProductChangeTags,
 } from "@/types/inventory-product";
 
+export function isDuplicateSkuError(error: unknown): boolean {
+  if (error instanceof ApiError) {
+    if (error.code === "DUPLICATE_SKU") return true;
+    return error.message.includes("SKU");
+  }
+  return false;
+}
+
 export type ProductsListMeta = {
   total: number;
   page: number;
