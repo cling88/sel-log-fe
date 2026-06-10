@@ -12,6 +12,7 @@ import {
   updateSourcingChannel,
   type SourcingListMeta,
 } from "@/lib/api/sourcing-channels";
+import { SOURCING_CHANNEL_FAVORITES_QUERY_KEY } from "@/hooks/use-sourcing-channel-favorites";
 import { isChannelHasProductsError } from "@/lib/sourcing-channel-delete";
 import { SOURCING_PAGE_SIZE } from "@/lib/sourcing-url";
 import type { CreateSourcingChannelBody } from "@/types/sourcing";
@@ -28,6 +29,9 @@ export function sourcingChannelsPickerQueryKey() {
 
 function invalidateSourcingChannels(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: SOURCING_CHANNELS_QUERY_KEY });
+  void queryClient.invalidateQueries({
+    queryKey: SOURCING_CHANNEL_FAVORITES_QUERY_KEY,
+  });
 }
 
 export function useSourcingChannelsList(searchQuery: string, page: number) {

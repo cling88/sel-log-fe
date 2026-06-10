@@ -7,6 +7,9 @@ import { Label } from "@/components/ui/label";
 import { SaleChannelSelectField } from "@/components/ledger/sale/sale-channel-select-field";
 import { useAuthUser } from "@/hooks/use-auth-user";
 import { useUserSettings } from "@/hooks/use-settings";
+import { useTrash } from "@/hooks/use-trash";
+import { useUnusedImages } from "@/hooks/use-unused-images";
+import { useAppDialog } from "@/components/common/app-dialog-provider";
 import {
   feeRateToPercentInput,
   percentInputToFeeRate,
@@ -22,9 +25,29 @@ function inputToRate(value: string, fallback: number): number {
 }
 
 export function SettingsPanel() {
+  const { confirm } = useAppDialog();
   const authUser = useAuthUser();
   const { settings, isLoading, errorMessage, updateSettings, isSaving } =
     useUserSettings();
+  const {
+    count: unusedImageCount,
+    isLoading: isUnusedImagesLoading,
+    isError: isUnusedImagesError,
+    errorMessage: unusedImagesErrorMessage,
+    r2NotConfigured,
+    refetch: refetchUnusedImages,
+    purge: purgeUnusedImages,
+    isPurging: isPurgingImages,
+  } = useUnusedImages();
+  const {
+    total: trashTotal,
+    isLoading: isTrashLoading,
+    isError: isTrashError,
+    errorMessage: trashErrorMessage,
+    refetch: refetchTrash,
+    purge: purgeTrash,
+    isPurging: isPurgingTrash,
+  } = useTrash();
   const [marginMinPercent, setMarginMinPercent] = useState("");
   const [marginMaxPercent, setMarginMaxPercent] = useState("");
   const [vatPercent, setVatPercent] = useState("");
@@ -74,6 +97,37 @@ export function SettingsPanel() {
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handlePurgeUnusedImages = async () => {
+    if (unusedImageCount <= 0 || isPurgingImages) return;
+
+    const ok = await confirm({
+      title: "레거시 이미지 삭제",
+      message: `미사용 이미지 ${unusedImageCount}개를 삭제합니다.\n복구할 수 없습니다. 계속할까요?`,
+      confirmLabel: "삭제",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    await purgeUnusedImages();
+    await refetchUnusedImages();
+  };
+
+  const handlePurgeTrash = async () => {
+    if (trashTotal <= 0 || isPurgingTrash) return;
+
+    const ok = await confirm({
+      title: "레거시 데이터 완전삭제",
+      message: `삭제된 데이터 ${trashTotal}건을 영구 삭제합니다.\n복구할 수 없습니다. 계속할까요?`,
+      confirmLabel: "삭제",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    await purgeTrash();
+    await refetchTrash();
+    await refetchUnusedImages();
   };
 
   if (isLoading) {
@@ -196,6 +250,51 @@ export function SettingsPanel() {
           <span className="text-sm text-emerald-700">저장되었습니다.</span>
         ) : null}
       </div>
+
+      <section className="space-y-3 border-t border-[var(--color-border)] pt-6">
+        {isTrashError && trashErrorMessage ? (
+          <p className="text-sm text-[var(--color-danger)]">{trashErrorMessage}</p>
+        ) : null}
+        {isUnusedImagesError && !r2NotConfigured && unusedImagesErrorMessage ? (
+          <p className="text-sm text-[var(--color-danger)]">
+            {unusedImagesErrorMessage}
+          </p>
+        ) : null}
+        <div className="flex flex-col gap-3 sm:flex-row">
+          {!r2NotConfigured ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="min-w-0 flex-1"
+              disabled={
+                isUnusedImagesLoading ||
+                isPurgingImages ||
+                unusedImageCount === 0
+              }
+              onClick={() => void handlePurgeUnusedImages()}
+            >
+              {isPurgingImages
+                ? "삭제 중..."
+                : isUnusedImagesLoading
+                  ? "레거시 이미지 확인 중..."
+                  : `레거시 이미지 삭제 - ${unusedImageCount}개 있음`}
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            className="min-w-0 flex-1 text-[var(--color-danger)] hover:text-[var(--color-danger)]"
+            disabled={isTrashLoading || isPurgingTrash || trashTotal === 0}
+            onClick={() => void handlePurgeTrash()}
+          >
+            {isPurgingTrash
+              ? "삭제 중..."
+              : isTrashLoading
+                ? "레거시 데이터 확인 중..."
+                : `레거시 데이터 완전삭제 - ${trashTotal}개 있음`}
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }

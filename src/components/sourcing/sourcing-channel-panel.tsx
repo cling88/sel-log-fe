@@ -14,13 +14,16 @@ import {
   ledgerListFooterClass,
 } from "@/components/ledger/ledger-list-shell";
 import { SourcingChannelDeleteBlockedDialog } from "@/components/sourcing/sourcing-channel-delete-blocked-dialog";
+import { SourcingChannelFavoritesBar } from "@/components/sourcing/sourcing-channel-favorites-bar";
 import { SourcingChannelFormDialog } from "@/components/sourcing/sourcing-channel-form-dialog";
 import { SourcingExcelDownloadButton } from "@/components/sourcing/sourcing-excel-download-button";
 import { SourcingExternalLink } from "@/components/sourcing/sourcing-external-link";
+import { SourcingFavoriteToggle } from "@/components/sourcing/sourcing-favorite-toggle";
 import {
   useSourcingChannelMutations,
   useSourcingChannelsList,
 } from "@/hooks/use-sourcing-channels";
+import { useSourcingChannelFavorites } from "@/hooks/use-sourcing-channel-favorites";
 import { useSourcingUrlSearch } from "@/hooks/use-sourcing-url-search";
 import { parseChannelHasProductsFromError } from "@/lib/sourcing-channel-delete";
 import { parseSourcingPage, replaceSourcingQuery } from "@/lib/sourcing-url";
@@ -52,6 +55,14 @@ export function SourcingChannelPanel() {
     isCreating,
     isUpdating,
   } = useSourcingChannelMutations();
+
+  const {
+    favorites: favoriteChannels,
+    isFavorite,
+    toggleFavorite,
+    isToggling: isFavoriteToggling,
+    togglingId: favoriteTogglingId,
+  } = useSourcingChannelFavorites();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editChannel, setEditChannel] = useState<SourcingChannel | null>(null);
@@ -108,6 +119,11 @@ export function SourcingChannelPanel() {
     }
   };
 
+  const handleFavoriteChannelSelect = (channel: SourcingChannel) => {
+    setSearch(channel.name);
+    applySearch(channel.name);
+  };
+
   return (
     <>
       <LedgerListShell>
@@ -122,6 +138,15 @@ export function SourcingChannelPanel() {
           registerLabel="+ 채널 등록"
           onRegister={openCreate}
           endContent={<SourcingExcelDownloadButton kind="channels" />}
+        />
+
+        <SourcingChannelFavoritesBar
+          favorites={favoriteChannels}
+          togglingId={favoriteTogglingId}
+          onSelect={handleFavoriteChannelSelect}
+          onToggleFavorite={(channel) =>
+            void toggleFavorite(channel.id, true)
+          }
         />
 
         {isError ? (
@@ -153,9 +178,10 @@ export function SourcingChannelPanel() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[680px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg)]/80 text-xs text-[var(--color-text-muted)]">
+                  <th className="w-10 px-2 py-2.5 font-medium" aria-label="즐겨찾기" />
                   <th className="px-4 py-2.5 font-medium">상호명</th>
                   <th className="px-4 py-2.5 font-medium">링크</th>
                   <th className="px-4 py-2.5 font-medium">메모</th>
@@ -169,6 +195,18 @@ export function SourcingChannelPanel() {
                     key={channel.id}
                     className="border-b border-[var(--color-border)] last:border-b-0"
                   >
+                    <td className="px-2 py-3">
+                      <SourcingFavoriteToggle
+                        active={isFavorite(channel.id)}
+                        loading={
+                          isFavoriteToggling && favoriteTogglingId === channel.id
+                        }
+                        label={channel.name}
+                        onToggle={() =>
+                          void toggleFavorite(channel.id, isFavorite(channel.id))
+                        }
+                      />
+                    </td>
                     <td className="px-4 py-3 font-medium text-[var(--color-text-primary)]">
                       {channel.name}
                     </td>

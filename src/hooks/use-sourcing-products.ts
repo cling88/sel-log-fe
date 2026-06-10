@@ -11,6 +11,7 @@ import {
   updateSourcingProduct,
   type SourcingProductsListResult,
 } from "@/lib/api/sourcing-products";
+import { SOURCING_PRODUCT_FAVORITES_QUERY_KEY } from "@/hooks/use-sourcing-product-favorites";
 import { SOURCING_PAGE_SIZE } from "@/lib/sourcing-url";
 import type { CreateSourcingProductBody } from "@/types/sourcing";
 
@@ -22,6 +23,9 @@ export function sourcingProductsListQueryKey(q: string, page: number) {
 
 function invalidateSourcingProducts(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: SOURCING_PRODUCTS_QUERY_KEY });
+  void queryClient.invalidateQueries({
+    queryKey: SOURCING_PRODUCT_FAVORITES_QUERY_KEY,
+  });
 }
 
 export function useSourcingProductsList(searchQuery: string, page: number) {

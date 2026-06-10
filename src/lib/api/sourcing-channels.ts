@@ -131,3 +131,32 @@ export async function deleteSourcingChannel(id: string): Promise<void> {
     method: "DELETE",
   });
 }
+
+/** GET /sourcing/channels/favorites */
+export async function fetchSourcingChannelFavorites(): Promise<SourcingChannel[]> {
+  const res = await apiFetch<ApiEnvelope<unknown[]>>(
+    "/sourcing/channels/favorites",
+  );
+  return (res.data ?? []).map((item) => normalizeSourcingChannel(item));
+}
+
+/** POST /sourcing/channels/:id/favorite */
+export async function addSourcingChannelFavorite(
+  channelId: string,
+): Promise<SourcingChannel> {
+  const res = await apiFetch<ApiEnvelope<unknown>>(
+    `/sourcing/channels/${channelId}/favorite`,
+    { method: "POST" },
+  );
+  return normalizeSourcingChannel(res.data);
+}
+
+/** DELETE /sourcing/channels/:id/favorite */
+export async function removeSourcingChannelFavorite(
+  channelId: string,
+): Promise<void> {
+  await apiFetch<ApiEnvelope<{ ok?: boolean }>>(
+    `/sourcing/channels/${channelId}/favorite`,
+    { method: "DELETE" },
+  );
+}

@@ -14,13 +14,16 @@ import {
   ledgerListFooterClass,
 } from "@/components/ledger/ledger-list-shell";
 import { SourcingExcelDownloadButton } from "@/components/sourcing/sourcing-excel-download-button";
+import { SourcingFavoriteToggle } from "@/components/sourcing/sourcing-favorite-toggle";
 import { SourcingProductDetailDialog } from "@/components/sourcing/sourcing-product-detail-dialog";
+import { SourcingProductFavoritesBar } from "@/components/sourcing/sourcing-product-favorites-bar";
 import { SourcingProductRegisterDialog } from "@/components/sourcing/sourcing-product-register-dialog";
 import { SourcingExternalLink } from "@/components/sourcing/sourcing-external-link";
 import {
   useSourcingProductMutations,
   useSourcingProductsList,
 } from "@/hooks/use-sourcing-products";
+import { useSourcingProductFavorites } from "@/hooks/use-sourcing-product-favorites";
 import { useSourcingUrlSearch } from "@/hooks/use-sourcing-url-search";
 import { formatAmount } from "@/lib/purchase-product-calc";
 import { parseSourcingPage, replaceSourcingQuery } from "@/lib/sourcing-url";
@@ -53,6 +56,14 @@ export function SourcingProductPanel() {
     isCreating,
     isUpdating,
   } = useSourcingProductMutations();
+
+  const {
+    favorites: favoriteProducts,
+    isFavorite,
+    toggleFavorite,
+    isToggling: isFavoriteToggling,
+    togglingId: favoriteTogglingId,
+  } = useSourcingProductFavorites();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<SourcingProduct | null>(null);
@@ -117,6 +128,15 @@ export function SourcingProductPanel() {
           endContent={<SourcingExcelDownloadButton kind="products" />}
         />
 
+        <SourcingProductFavoritesBar
+          favorites={favoriteProducts}
+          togglingId={favoriteTogglingId}
+          onSelect={openDetail}
+          onToggleFavorite={(product) =>
+            void toggleFavorite(product.id, true)
+          }
+        />
+
         {isError ? (
           <div className={ledgerListBodyClass}>
             <p className="py-8 text-center text-sm text-[var(--color-danger)]">
@@ -156,7 +176,7 @@ export function SourcingProductPanel() {
                 key={product.id}
                 role="button"
                 tabIndex={0}
-                className="flex h-[90px] cursor-pointer gap-3 overflow-hidden rounded-xl border border-[var(--color-border)] bg-white p-2.5 shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--color-bg)]/40"
+                className="relative flex h-[90px] cursor-pointer gap-3 overflow-hidden rounded-xl border border-[var(--color-border)] bg-white p-2.5 pr-10 shadow-[var(--shadow-sm)] transition-colors hover:bg-[var(--color-bg)]/40"
                 onClick={() => openDetail(product)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
@@ -165,6 +185,23 @@ export function SourcingProductPanel() {
                   }
                 }}
               >
+                <div
+                  className="absolute right-1 top-1 z-10"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <SourcingFavoriteToggle
+                    active={isFavorite(product.id)}
+                    loading={
+                      isFavoriteToggling && favoriteTogglingId === product.id
+                    }
+                    label={product.name}
+                    className="size-7"
+                    onToggle={() =>
+                      void toggleFavorite(product.id, isFavorite(product.id))
+                    }
+                  />
+                </div>
+
                 <div className="relative size-[72px] shrink-0 overflow-hidden rounded-lg bg-[var(--color-bg)]">
                   {product.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -219,28 +256,28 @@ export function SourcingProductPanel() {
                 </div>
 
                 <div
-                  className="flex shrink-0 flex-col justify-center gap-1"
+                  className="absolute bottom-1 right-1 z-10 flex items-center gap-0"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    className="size-8"
+                    className="size-7"
                     onClick={() => openEdit(product)}
                     aria-label="수정"
                   >
-                    <Pencil className="size-4" />
+                    <Pencil className="size-3.5" />
                   </Button>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    className="size-8 text-[var(--color-danger)]"
+                    className="size-7 text-[var(--color-danger)]"
                     onClick={() => void handleDelete(product)}
                     aria-label="삭제"
                   >
-                    <Trash2 className="size-4" />
+                    <Trash2 className="size-3.5" />
                   </Button>
                 </div>
               </article>
@@ -269,6 +306,21 @@ export function SourcingProductPanel() {
           if (!open) setDetailProduct(null);
         }}
         product={detailProduct}
+        isFavorite={detailProduct ? isFavorite(detailProduct.id) : false}
+        favoriteLoading={
+          detailProduct != null &&
+          isFavoriteToggling &&
+          favoriteTogglingId === detailProduct.id
+        }
+        onToggleFavorite={
+          detailProduct
+            ? () =>
+                void toggleFavorite(
+                  detailProduct.id,
+                  isFavorite(detailProduct.id),
+                )
+            : undefined
+        }
         onEdit={openEdit}
         onDelete={(product) => void handleDelete(product)}
       />

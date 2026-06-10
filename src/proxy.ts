@@ -5,7 +5,7 @@ const TOKEN_COOKIE = "sellog_token";
 /** 인증 없이 접근 가능한 경로 */
 const PUBLIC_PATHS = ["/login"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 정적 파일, Next.js 내부 경로 제외

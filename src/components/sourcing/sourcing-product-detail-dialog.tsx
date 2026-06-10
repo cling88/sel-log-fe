@@ -11,7 +11,9 @@ import {
 } from "@/components/ui/dialog";
 import { MODAL_DIALOG_FOOTER_CLASS } from "@/components/common/modal-footer-classes";
 import { SourcingExternalLink } from "@/components/sourcing/sourcing-external-link";
+import { SourcingFavoriteToggle } from "@/components/sourcing/sourcing-favorite-toggle";
 import { formatAmount } from "@/lib/purchase-product-calc";
+import { cn } from "@/lib/utils";
 import type { SourcingProduct } from "@/types/sourcing";
 
 function formatRegisteredAt(iso: string): string {
@@ -42,6 +44,9 @@ interface SourcingProductDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   product: SourcingProduct | null;
+  isFavorite?: boolean;
+  favoriteLoading?: boolean;
+  onToggleFavorite?: () => void | Promise<void>;
   onEdit: (product: SourcingProduct) => void;
   onDelete: (product: SourcingProduct) => void;
 }
@@ -50,6 +55,9 @@ export function SourcingProductDetailDialog({
   open,
   onOpenChange,
   product,
+  isFavorite = false,
+  favoriteLoading = false,
+  onToggleFavorite,
   onEdit,
   onDelete,
 }: SourcingProductDetailDialogProps) {
@@ -133,30 +141,52 @@ export function SourcingProductDetailDialog({
           </dl>
         </div>
 
-        <DialogFooter className={MODAL_DIALOG_FOOTER_CLASS}>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            닫기
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="text-[var(--color-danger)]"
-            onClick={() => {
-              onOpenChange(false);
-              onDelete(product);
-            }}
-          >
-            삭제
-          </Button>
-          <Button
-            type="button"
-            onClick={() => {
-              onOpenChange(false);
-              onEdit(product);
-            }}
-          >
-            수정
-          </Button>
+        <DialogFooter
+          className={cn(
+            MODAL_DIALOG_FOOTER_CLASS,
+            "!flex-row flex-wrap items-center justify-between gap-2",
+          )}
+        >
+          {onToggleFavorite ? (
+            <SourcingFavoriteToggle
+              active={isFavorite}
+              loading={favoriteLoading}
+              label={product.name}
+              className="-ml-1"
+              onToggle={onToggleFavorite}
+            />
+          ) : (
+            <span />
+          )}
+          <div className="flex flex-row flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              닫기
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="text-[var(--color-danger)]"
+              onClick={() => {
+                onOpenChange(false);
+                onDelete(product);
+              }}
+            >
+              삭제
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                onOpenChange(false);
+                onEdit(product);
+              }}
+            >
+              수정
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

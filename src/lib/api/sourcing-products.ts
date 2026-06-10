@@ -156,3 +156,32 @@ export async function deleteSourcingProduct(id: string): Promise<void> {
     method: "DELETE",
   });
 }
+
+/** GET /sourcing/products/favorites */
+export async function fetchSourcingProductFavorites(): Promise<SourcingProduct[]> {
+  const res = await apiFetch<ApiEnvelope<unknown[]>>(
+    "/sourcing/products/favorites",
+  );
+  return (res.data ?? []).map((item) => normalizeSourcingProduct(item));
+}
+
+/** POST /sourcing/products/:id/favorite */
+export async function addSourcingProductFavorite(
+  productId: string,
+): Promise<SourcingProduct> {
+  const res = await apiFetch<ApiEnvelope<unknown>>(
+    `/sourcing/products/${productId}/favorite`,
+    { method: "POST" },
+  );
+  return normalizeSourcingProduct(res.data);
+}
+
+/** DELETE /sourcing/products/:id/favorite */
+export async function removeSourcingProductFavorite(
+  productId: string,
+): Promise<void> {
+  await apiFetch<ApiEnvelope<{ ok?: boolean }>>(
+    `/sourcing/products/${productId}/favorite`,
+    { method: "DELETE" },
+  );
+}
