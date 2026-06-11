@@ -20,6 +20,11 @@ import { formatPurchaseLineVendorLabel } from "@/lib/purchase-vendor-display";
 import { PurchaseVendorLabel } from "@/components/ledger/purchase/purchase-vendor-label";
 import type { ProductPurchaseLine } from "@/types/purchase-product";
 import {
+  isPurchaseLineMultilineMobileLabel,
+  PurchaseLineFieldTextDesktop,
+  PurchaseLineFieldTextMobile,
+} from "@/components/ledger/purchase/purchase-line-field-text";
+import {
   purchasePrimaryActionClass,
   purchaseProductLineClickClass,
   purchaseProductStockPendingBgClass,
@@ -31,7 +36,7 @@ import { cn } from "@/lib/utils";
 
 /** 열 너비 고정 — 헤더·본문이 동일 grid를 공유해야 정렬됨 */
 const PRODUCT_TABLE_GRID_CLASS =
-  "grid w-full min-w-[1360px] grid-cols-[64px_108px_58px_minmax(160px,1.2fr)_96px_56px_96px_88px_88px_112px_minmax(128px,max-content)_minmax(120px,1fr)_minmax(80px,1fr)]";
+  "grid w-full min-w-[1360px] grid-cols-[64px_108px_58px_minmax(140px,200px)_96px_56px_96px_88px_88px_112px_minmax(128px,max-content)_minmax(100px,140px)_minmax(120px,1fr)]";
 
 const cellBase = "flex items-center px-2.5 text-xs leading-snug";
 
@@ -148,7 +153,7 @@ function ProductNameCell({
   const hasLink = href.trim().length > 0;
   const className = cn(
     truncateTextClass,
-    "max-w-[150px] font-medium",
+    "font-medium",
     hasLink
       ? "text-[var(--primary-600)] hover:underline"
       : "text-[var(--color-text-primary)]",
@@ -391,7 +396,7 @@ function DesktopRow({
           cn(truncateCellClass, "text-[var(--color-text-muted)]"),
         )}
       >
-        <TruncatedText value={line.memo} />
+        <PurchaseLineFieldTextDesktop text={line.memo} />
       </div>
     </div>
   );
@@ -475,7 +480,7 @@ function MobileCard({
       value: formatRecommendedPriceRange(unitPrice, finalUnit, marginRates),
     },
     { label: "출금계좌", value: formatPurchaseLineBankLabel(line) },
-    { label: "비고", value: line.memo || "—" },
+    { label: "비고", value: <PurchaseLineFieldTextMobile text={line.memo} /> },
   ];
 
   const stockPending = !line.stockReflected && !groupDisabled;
@@ -493,12 +498,24 @@ function MobileCard({
         {fields.map(({ label, value }) => (
           <div
             key={label}
-            className="grid grid-cols-[5.5rem_1fr] items-center gap-1.5 text-sm"
+            className={cn(
+              "grid grid-cols-[5.5rem_1fr] gap-1.5 text-sm",
+              isPurchaseLineMultilineMobileLabel(label)
+                ? "items-start"
+                : "items-center",
+            )}
           >
             <dt className="text-xs font-medium text-[var(--color-text-muted)]">
               {label}
             </dt>
-            <dd className="min-w-0 truncate text-[var(--color-text-primary)]">{value}</dd>
+            <dd
+              className={cn(
+                "min-w-0 text-[var(--color-text-primary)]",
+                !isPurchaseLineMultilineMobileLabel(label) && "truncate",
+              )}
+            >
+              {value}
+            </dd>
           </div>
         ))}
         <div

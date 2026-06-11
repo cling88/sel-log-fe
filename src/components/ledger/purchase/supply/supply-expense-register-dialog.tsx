@@ -112,6 +112,20 @@ function parseForm(
   };
 }
 
+/** 재고반영 후 PATCH에 넣으면 안 되는 필드 — 원본 라인 값 유지 */
+function applySupplyStockLockedFields(
+  payload: Omit<SupplyExpenseLine, "id" | "stockReflected">,
+  editLine: SupplyExpenseLine,
+): Omit<SupplyExpenseLine, "id" | "stockReflected"> {
+  return {
+    ...payload,
+    paymentDate: editLine.paymentDate,
+    itemName: editLine.itemName,
+    quantity: editLine.quantity,
+    paymentAmount: editLine.paymentAmount,
+  };
+}
+
 export function SupplyExpenseRegisterDialog({
   open,
   onOpenChange,
@@ -126,6 +140,7 @@ export function SupplyExpenseRegisterDialog({
   const { alert } = useAppDialog();
   const { vendors } = useVendors();
   const isEdit = editLine != null;
+  const stockLocked = Boolean(editLine?.stockReflected);
   const [form, setForm] = useState<SupplyExpenseLineInput>(() =>
     createEmptySupplyExpenseInput(resolvePaymentDate(defaultPaymentDate)),
   );
@@ -184,18 +199,23 @@ export function SupplyExpenseRegisterDialog({
       return;
     }
 
+    const payload =
+      stockLocked && editLine
+        ? applySupplyStockLockedFields(parsed, editLine)
+        : parsed;
+
     setSubmitting(true);
     try {
       if (isEdit && editLine && onUpdate) {
-        await Promise.resolve(onUpdate(editLine.id, parsed));
+        await Promise.resolve(onUpdate(editLine.id, payload));
         await alert("수정되었습니다.");
         onOpenChange(false);
         return;
       }
-      await Promise.resolve(onSave(parsed, { closeAfter }));
+      await Promise.resolve(onSave(payload, { closeAfter }));
       if (!closeAfter) {
-        formSessionRef.current = `new:${parsed.paymentDate}`;
-        resetForm(parsed.paymentDate);
+        formSessionRef.current = `new:${payload.paymentDate}`;
+        resetForm(payload.paymentDate);
       }
     } finally {
       setSubmitting(false);
@@ -210,13 +230,37 @@ export function SupplyExpenseRegisterDialog({
         <DialogHeader className="border-b border-[var(--color-border)] px-5 py-4">
           <DialogTitle>{isEdit ? "부가 항목 상세" : "부가 항목 등록"}</DialogTitle>
           <DialogDescription>
-            {isEdit
-              ? "내역을 확인·수정하거나 삭제할 수 있습니다."
-              : "포장·소모품 등 부가 비용입니다. 재고 반영은 저장 후 목록에서 진행할 수 있습니다."}
+            {stockLocked
+              ? "재고 반영된 내역입니다. 구매처·출금계좌·메모만 수정할 수 있습니다."
+              : isEdit
+                ? "내역을 확인·수정하거나 삭제할 수 있습니다."
+                : "포장·소모품 등 부가 비용입니다. 재고 반영은 저장 후 목록에서 진행할 수 있습니다."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {stockLocked ? (
+            <p className="mb-4 rounded-lg border border-[var(--color-warning)]/40 bg-amber-50 px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+              구매처·출금계좌·메모만 수정할 수 있습니다. 결제일·항목명·수량·금액은 재고반영과
+              연결되어 변경할 수 없습니다.
+            </p>
+          ) : null}
+          {stockLocked && editLine?.productSku ? (
+            <p className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+              재고 반영 SKU{" "}
+              <span className="font-mono font-medium text-[var(--color-text-primary)]">
+                {editLine.productSku}
+              </span>
+              {editLine.reflectedQty != null ? (
+                <>
+                  {" · 반영 "}
+                  <span className="tabular-nums text-[var(--color-text-primary)]">
+                    {editLine.reflectedQty}개
+                  </span>
+                </>
+              ) : null}
+            </p>
+          ) : null}
           {error ? (
             <p className="mb-4 rounded-lg border border-[var(--color-danger)]/30 bg-red-50 px-3 py-2 text-sm text-[var(--color-danger)]">
               {error}
@@ -232,6 +276,7 @@ export function SupplyExpenseRegisterDialog({
                 id="se-date"
                 type="date"
                 value={form.paymentDate || todayIso()}
+                disabled={stockLocked}
                 onChange={(e) => patch({ paymentDate: e.target.value })}
               />
               <p className="text-xs text-[var(--color-text-muted)]">
@@ -252,6 +297,7 @@ export function SupplyExpenseRegisterDialog({
               <Input
                 id="se-name"
                 value={form.itemName}
+                disabled={stockLocked}
                 onChange={(e) => patch({ itemName: e.target.value })}
                 placeholder="예: 골판지 박스, 완충재"
               />
@@ -278,6 +324,7 @@ export function SupplyExpenseRegisterDialog({
                   type="number"
                   min={1}
                   value={form.quantity}
+                  disabled={stockLocked}
                   onChange={(e) => patch({ quantity: e.target.value })}
                 />
               </div>
@@ -290,6 +337,7 @@ export function SupplyExpenseRegisterDialog({
                   type="number"
                   min={0}
                   value={form.paymentAmount}
+                  disabled={stockLocked}
                   onChange={(e) => patch({ paymentAmount: e.target.value })}
                 />
               </div>
@@ -312,10 +360,10 @@ export function SupplyExpenseRegisterDialog({
         <DialogFooter
           className={cn(
             REGISTER_MODAL_FOOTER_CLASS,
-            isEdit && onDelete && "sm:justify-between",
+            isEdit && onDelete && !stockLocked && "sm:justify-between",
           )}
         >
-          {isEdit && onDelete ? (
+          {isEdit && onDelete && !stockLocked ? (
             <Button
               type="button"
               variant="outline"

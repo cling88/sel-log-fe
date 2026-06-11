@@ -18,6 +18,10 @@ export interface SupplyExpenseLine
   paymentAmount: number;
   memo: string;
   stockReflected: boolean;
+  /** 재고반영 후 표시용 */
+  productSku?: string;
+  /** 재고반영 당시 수량 (라인 quantity와 다를 수 있음) */
+  reflectedQty?: number;
 }
 
 export interface SupplyExpenseLineInput {

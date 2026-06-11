@@ -6,7 +6,6 @@ import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { useLedgerUrlSearch } from "@/hooks/use-ledger-url-search";
 import {
   getPurchaseErrorMessage,
-  linePayloadForBankUpdateFromProductPurchase,
   linePayloadFromProductPurchase,
   useCancelProductPurchaseStockReflect,
   useCreateProductPurchaseLine,
@@ -165,13 +164,6 @@ export function ProductPurchasePanel() {
     lineId: string,
     input: Omit<ProductPurchaseLine, "id" | "stockReflected">,
   ) => {
-    const line = lines.find((l) => l.id === lineId);
-    if (line?.stockReflected) {
-      await alert(
-        "재고 반영된 내역은 수정할 수 없습니다. 출금계좌만 변경할 수 있습니다.",
-      );
-      return;
-    }
     await updateLine.mutateAsync({
       id: lineId,
       body: linePayloadFromProductPurchase(input),
@@ -179,31 +171,6 @@ export function ProductPurchasePanel() {
     setEditLineId(null);
     setDialogOpen(false);
     await alert("저장되었습니다.");
-  };
-
-  const handleUpdateBankOnly = async (lineId: string, bankId: string | null) => {
-    const line = lines.find((l) => l.id === lineId);
-    if (!line) return;
-
-    await updateLine.mutateAsync({
-      id: lineId,
-      body: linePayloadForBankUpdateFromProductPurchase({
-        paymentDate: line.paymentDate,
-        orderNo: line.orderNo,
-        imageUrl: line.imageUrl,
-        productName: line.productName,
-        productLink: line.productLink,
-        vendor: line.vendor,
-        vendorId: line.vendorId ?? "",
-        vendorSnapshot: line.vendorSnapshot,
-        quantity: line.quantity,
-        paymentAmount: line.paymentAmount,
-        memo: line.memo,
-        bankId,
-        bank: line.bank,
-      }),
-    });
-    await alert("출금계좌가 저장되었습니다.");
   };
 
   const handleDeleteLine = async (lineId: string) => {
@@ -518,7 +485,6 @@ export function ProductPurchasePanel() {
         editLine={editLine}
         onSave={handleSave}
         onUpdate={handleUpdate}
-        onUpdateBankOnly={handleUpdateBankOnly}
         onDelete={
           editLine ? () => handleDeleteLine(editLine.id) : undefined
         }

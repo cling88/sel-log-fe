@@ -48,11 +48,6 @@ interface ProductPurchaseRegisterDialogProps {
     lineId: string,
     line: Omit<ProductPurchaseLine, "id" | "stockReflected">,
   ) => void | Promise<void>;
-  /** 재고 반영 후에도 출금계좌만 수정 */
-  onUpdateBankOnly?: (
-    lineId: string,
-    bankId: string | null,
-  ) => void | Promise<void>;
   onDelete?: () => void | Promise<void>;
   canDelete?: boolean;
   deleteDisabledReason?: string;
@@ -149,6 +144,21 @@ function parseForm(
   };
 }
 
+/** 재고반영 후 PATCH에 넣으면 안 되는 필드 — 원본 라인 값 유지 */
+function applyProductStockLockedFields(
+  payload: Omit<ProductPurchaseLine, "id" | "stockReflected">,
+  editLine: ProductPurchaseLine,
+): Omit<ProductPurchaseLine, "id" | "stockReflected"> {
+  return {
+    ...payload,
+    paymentDate: editLine.paymentDate,
+    productName: editLine.productName,
+    orderNo: editLine.orderNo,
+    quantity: editLine.quantity,
+    paymentAmount: editLine.paymentAmount,
+  };
+}
+
 export function ProductPurchaseRegisterDialog({
   open,
   onOpenChange,
@@ -156,7 +166,6 @@ export function ProductPurchaseRegisterDialog({
   editLine,
   onSave,
   onUpdate,
-  onUpdateBankOnly,
   onDelete,
   canDelete = true,
   deleteDisabledReason,
@@ -165,7 +174,7 @@ export function ProductPurchaseRegisterDialog({
   const { vendors } = useVendors();
   const uploadImage = useUploadImage();
   const isEdit = editLine != null;
-  const readOnly = Boolean(editLine?.stockReflected);
+  const stockLocked = Boolean(editLine?.stockReflected);
   const [form, setForm] = useState<ProductPurchaseLineInput>(() =>
     createEmptyProductPurchaseInput(resolvePaymentDate(defaultPaymentDate)),
   );
@@ -173,13 +182,8 @@ export function ProductPurchaseRegisterDialog({
   const [previewUrl, setPreviewUrl] = useState("");
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [bankSubmitting, setBankSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [initialBankId, setInitialBankId] = useState("");
   const formSessionRef = useRef<string | null>(null);
-
-  const bankDirty =
-    isEdit && resolveBankId(form.bankId) !== resolveBankId(initialBankId);
 
   const revokePreviewUrl = (url: string) => {
     if (url.startsWith("blob:")) URL.revokeObjectURL(url);
@@ -211,7 +215,6 @@ export function ProductPurchaseRegisterDialog({
     if (editLine) {
       const input = lineToInput(editLine);
       setForm(input);
-      setInitialBankId(input.bankId);
       setError(null);
       setImageModalOpen(false);
       setPreviewUrl((prev) => {
@@ -261,22 +264,7 @@ export function ProductPurchaseRegisterDialog({
     await onDelete();
   };
 
-  const handleBankOnlySave = async () => {
-    if (!isEdit || !editLine || !onUpdateBankOnly) return;
-    setBankSubmitting(true);
-    try {
-      await Promise.resolve(
-        onUpdateBankOnly(editLine.id, resolveBankId(form.bankId)),
-      );
-      setInitialBankId(form.bankId);
-    } finally {
-      setBankSubmitting(false);
-    }
-  };
-
   const submit = async (closeAfter: boolean) => {
-    if (readOnly) return;
-
     const productLink = form.productLink.trim();
     if (productLink && !isHttpUrl(productLink)) {
       setError("상품 상세 링크는 http:// 또는 https:// 로 시작해야 합니다.");
@@ -302,7 +290,10 @@ export function ProductPurchaseRegisterDialog({
         imageUrl = uploaded.url;
       }
 
-      const payload = { ...parsed, imageUrl };
+      let payload = { ...parsed, imageUrl };
+      if (stockLocked && editLine) {
+        payload = applyProductStockLockedFields(payload, editLine);
+      }
       if (isEdit && editLine && onUpdate) {
         await Promise.resolve(onUpdate(editLine.id, payload));
         return;
@@ -332,8 +323,8 @@ export function ProductPurchaseRegisterDialog({
         <DialogHeader className="border-b border-[var(--color-border)] px-5 py-4">
           <DialogTitle>{isEdit ? "상품 매입 상세" : "상품 매입 등록"}</DialogTitle>
           <DialogDescription>
-            {readOnly
-              ? "재고 반영된 내역입니다. 상품·금액은 수정할 수 없고 출금계좌만 변경할 수 있습니다."
+            {stockLocked
+              ? "재고 반영된 내역입니다. 구매처·출금계좌·메모·이미지·상품 링크만 수정할 수 있습니다."
               : isEdit
                 ? "내역을 확인·수정하거나 삭제할 수 있습니다."
                 : "한 건씩 저장하면 같은 결제날짜끼리 목록에서 자동으로 묶여 보입니다."}
@@ -341,10 +332,10 @@ export function ProductPurchaseRegisterDialog({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          {readOnly ? (
+          {stockLocked ? (
             <p className="mb-4 rounded-lg border border-[var(--color-warning)]/40 bg-amber-50 px-3 py-2 text-sm text-[var(--color-text-secondary)]">
-              재고 반영 완료된 내역은 상품·금액 등은 수정할 수 없습니다. 출금계좌만
-              변경할 수 있습니다.
+              구매처·출금계좌·메모·이미지·상품 링크만 수정할 수 있습니다. 결제일·상품명·주문번호·수량·결제금액은
+              재고·원가와 연결되어 변경할 수 없습니다.
             </p>
           ) : null}
           {error ? (
@@ -362,7 +353,7 @@ export function ProductPurchaseRegisterDialog({
                 id="pp-date"
                 type="date"
                 value={form.paymentDate || todayIso()}
-                disabled={readOnly}
+                disabled={stockLocked}
                 onChange={(e) => patch({ paymentDate: e.target.value })}
               />
               <p className="text-xs text-[var(--color-text-muted)]">
@@ -374,7 +365,6 @@ export function ProductPurchaseRegisterDialog({
               className="sm:col-span-2"
               bankId={resolveBankId(form.bankId)}
               bankSnapshot={editLine?.bank}
-              disabled={!isEdit && readOnly}
               onBankIdChange={(id) =>
                 patch({ bankId: id ?? "" })
               }
@@ -389,7 +379,6 @@ export function ProductPurchaseRegisterDialog({
                   : undefined
               }
               required
-              disabled={readOnly}
               onVendorIdChange={(id) => patch({ vendorId: id ?? "" })}
             />
 
@@ -398,7 +387,7 @@ export function ProductPurchaseRegisterDialog({
               <Input
                 id="pp-order-no"
                 value={form.orderNo}
-                disabled={readOnly}
+                disabled={stockLocked}
                 onChange={(e) => patch({ orderNo: e.target.value })}
                 placeholder="선택"
               />
@@ -411,7 +400,7 @@ export function ProductPurchaseRegisterDialog({
               <Input
                 id="pp-name"
                 value={form.productName}
-                disabled={readOnly}
+                disabled={stockLocked}
                 onChange={(e) => patch({ productName: e.target.value })}
               />
             </div>
@@ -421,7 +410,6 @@ export function ProductPurchaseRegisterDialog({
               <Input
                 id="pp-link"
                 value={form.productLink}
-                disabled={readOnly}
                 onChange={(e) => patch({ productLink: e.target.value })}
                 placeholder="https://"
               />
@@ -436,7 +424,7 @@ export function ProductPurchaseRegisterDialog({
                 type="number"
                 min={1}
                 value={form.quantity}
-                disabled={readOnly}
+                disabled={stockLocked}
                 onChange={(e) => patch({ quantity: e.target.value })}
               />
             </div>
@@ -450,7 +438,7 @@ export function ProductPurchaseRegisterDialog({
                 type="number"
                 min={0}
                 value={form.paymentAmount}
-                disabled={readOnly}
+                disabled={stockLocked}
                 onChange={(e) => patch({ paymentAmount: e.target.value })}
               />
             </div>
@@ -468,7 +456,6 @@ export function ProductPurchaseRegisterDialog({
               <Label>상품 이미지 (선택)</Label>
               <ProductImageField
                 displayUrl={displayImageUrl}
-                disabled={readOnly}
                 onOpenUpload={() => setImageModalOpen(true)}
                 onClear={clearImage}
               />
@@ -480,7 +467,6 @@ export function ProductPurchaseRegisterDialog({
                 id="pp-memo"
                 rows={4}
                 value={form.memo}
-                disabled={readOnly}
                 onChange={(e) => patch({ memo: e.target.value })}
                 placeholder="메모, 특이사항 등"
                 className="min-h-[6.5rem] resize-y"
@@ -492,12 +478,12 @@ export function ProductPurchaseRegisterDialog({
         <DialogFooter
           className={cn(
             REGISTER_MODAL_FOOTER_CLASS,
-            (isEdit && onDelete && !readOnly) || (readOnly && onUpdateBankOnly)
+            isEdit && onDelete && !stockLocked
               ? "sm:justify-between"
               : undefined,
           )}
         >
-          {isEdit && onDelete && !readOnly ? (
+          {isEdit && onDelete && !stockLocked ? (
             <Button
               type="button"
               variant="outline"
@@ -506,27 +492,17 @@ export function ProductPurchaseRegisterDialog({
             >
               삭제
             </Button>
-          ) : readOnly && onUpdateBankOnly && bankDirty ? (
-            <Button
-              type="button"
-              disabled={bankSubmitting}
-              onClick={() => void handleBankOnlySave()}
-            >
-              {bankSubmitting ? "저장 중…" : "출금계좌 저장"}
-            </Button>
-          ) : (
-            <span />
-          )}
+          ) : null}
           <div className="flex flex-wrap justify-end gap-2">
             <Button
               type="button"
               variant="outline"
-              disabled={submitting || bankSubmitting}
+              disabled={submitting}
               onClick={() => onOpenChange(false)}
             >
-              {readOnly ? "닫기" : "취소"}
+              취소
             </Button>
-            {!readOnly && isEdit ? (
+            {isEdit ? (
               <Button
                 type="button"
                 disabled={submitting}
@@ -534,7 +510,7 @@ export function ProductPurchaseRegisterDialog({
               >
                 {submitting ? "저장 중…" : "저장"}
               </Button>
-            ) : !readOnly ? (
+            ) : (
               <>
                 <Button
                   type="button"
@@ -548,7 +524,7 @@ export function ProductPurchaseRegisterDialog({
                   {submitting ? "저장 중…" : "저장하고 닫기"}
                 </Button>
               </>
-            ) : null}
+            )}
           </div>
         </DialogFooter>
       </DialogContent>

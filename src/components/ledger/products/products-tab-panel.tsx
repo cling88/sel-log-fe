@@ -778,22 +778,22 @@ export function ProductsTabPanel() {
           ) : selectedProduct ? (
             <div className="p-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-1 items-start gap-3">
                   {selectedProduct.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={selectedProduct.imageUrl}
                       alt=""
-                      className="size-14 rounded-md border border-[var(--color-border)] object-cover bg-[var(--color-bg)]"
+                      className="size-14 shrink-0 rounded-md border border-[var(--color-border)] object-cover bg-[var(--color-bg)]"
                     />
                   ) : (
-                    <div className="size-14 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]" />
+                    <div className="size-14 shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]" />
                   )}
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-semibold">
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-base font-semibold leading-snug">
                       {selectedProduct.name}
                     </p>
-                    <p className="text-xs text-[var(--color-text-secondary)]">
+                    <p className="mt-0.5 break-words text-xs text-[var(--color-text-secondary)]">
                       SKU {selectedProduct.sku}
                       {selectedProduct.category
                         ? ` · ${selectedProduct.category}`
@@ -806,7 +806,7 @@ export function ProductsTabPanel() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-end gap-2">
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                   <Button
                     type="button"
                     variant="outline"

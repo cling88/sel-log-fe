@@ -19,14 +19,19 @@ import { formatAmount } from "@/lib/purchase-product-calc";
 import { formatPurchaseLineBankLabel } from "@/lib/purchase-bank-display";
 import { PurchaseVendorLabel } from "@/components/ledger/purchase/purchase-vendor-label";
 import { formatPurchaseLineVendorLabel } from "@/lib/purchase-vendor-display";
+import {
+  isPurchaseLineMultilineMobileLabel,
+  PurchaseLineFieldTextDesktop,
+  PurchaseLineFieldTextMobile,
+} from "@/components/ledger/purchase/purchase-line-field-text";
 import type { SupplyExpenseLine } from "@/types/purchase-supply";
 import { cn } from "@/lib/utils";
 
 const DESKTOP_GRID_WITH_VENDOR =
-  "grid w-full min-w-[1000px] items-center grid-cols-[minmax(56px,72px)_minmax(160px,1.6fr)_minmax(100px,1fr)_minmax(56px,64px)_minmax(96px,104px)_minmax(128px,auto)_minmax(120px,1fr)_minmax(88px,1fr)]";
+  "grid w-full min-w-[1000px] items-center grid-cols-[minmax(56px,72px)_minmax(140px,200px)_minmax(88px,120px)_minmax(56px,64px)_minmax(96px,104px)_minmax(128px,auto)_minmax(100px,140px)_minmax(100px,1fr)]";
 
 const DESKTOP_GRID_NO_VENDOR =
-  "grid w-full min-w-[880px] items-center grid-cols-[minmax(56px,72px)_minmax(180px,1.8fr)_minmax(56px,64px)_minmax(96px,104px)_minmax(128px,auto)_minmax(120px,1fr)_minmax(88px,1fr)]";
+  "grid w-full min-w-[880px] items-center grid-cols-[minmax(56px,72px)_minmax(140px,220px)_minmax(56px,64px)_minmax(96px,104px)_minmax(128px,auto)_minmax(100px,140px)_minmax(100px,1fr)]";
 
 interface SupplyExpenseLineListProps {
   lines: SupplyExpenseLine[];
@@ -157,8 +162,13 @@ function DesktopRow({
       >
         {index + 1}
       </div>
-      <div className={cn(purchaseTableBodyCellClass, "font-medium text-[var(--color-text-primary)]")}>
-        {line.itemName}
+      <div
+        className={cn(
+          purchaseTableBodyCellClass,
+          "min-w-0 overflow-hidden font-medium text-[var(--color-text-primary)]",
+        )}
+      >
+        <PurchaseLineFieldTextDesktop text={line.itemName} />
       </div>
       {!hideVendorColumn ? (
         <div className={cn(purchaseTableBodyCellClass, "text-[var(--color-text-secondary)]")}>
@@ -191,8 +201,13 @@ function DesktopRow({
       <div className={cn(purchaseTableBodyCellClass, "truncate text-[var(--color-text-secondary)]")}>
         {formatPurchaseLineBankLabel(line)}
       </div>
-      <div className={cn(purchaseTableBodyCellClass, "text-[var(--color-text-muted)]")}>
-        {line.memo || "—"}
+      <div
+        className={cn(
+          purchaseTableBodyCellClass,
+          "min-w-0 overflow-hidden text-[var(--color-text-muted)]",
+        )}
+      >
+        <PurchaseLineFieldTextDesktop text={line.memo} />
       </div>
     </div>
   );
@@ -217,7 +232,10 @@ function MobileCard({
 }) {
   const fields: { label: string; value: ReactNode }[] = [
     { label: "번호", value: index + 1 },
-    { label: "항목명", value: line.itemName },
+  {
+      label: "항목명",
+      value: <PurchaseLineFieldTextMobile text={line.itemName} />,
+    },
     ...(hideVendorColumn
       ? []
       : [
@@ -229,7 +247,7 @@ function MobileCard({
     { label: "수량", value: `${line.quantity}개` },
     { label: "금액", value: `${formatAmount(line.paymentAmount)}원` },
     { label: "출금계좌", value: formatPurchaseLineBankLabel(line) },
-    { label: "비고", value: line.memo || "—" },
+    { label: "비고", value: <PurchaseLineFieldTextMobile text={line.memo} /> },
   ];
 
   return (
@@ -245,12 +263,24 @@ function MobileCard({
         {fields.map(({ label, value }) => (
           <div
             key={label}
-            className="grid grid-cols-[5.5rem_1fr] items-center gap-1.5 text-sm"
+            className={cn(
+              "grid grid-cols-[5.5rem_1fr] gap-1.5 text-sm",
+              isPurchaseLineMultilineMobileLabel(label)
+                ? "items-start"
+                : "items-center",
+            )}
           >
             <dt className="text-xs font-medium text-[var(--color-text-muted)]">
               {label}
             </dt>
-            <dd className="min-w-0 text-[var(--color-text-primary)]">{value}</dd>
+            <dd
+              className={cn(
+                "min-w-0 text-[var(--color-text-primary)]",
+                !isPurchaseLineMultilineMobileLabel(label) && "truncate",
+              )}
+            >
+              {value}
+            </dd>
           </div>
         ))}
         <div

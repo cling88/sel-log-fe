@@ -207,6 +207,7 @@ function normalizeProductPurchaseLine(raw: Record<string, unknown>): ProductPurc
 
 function normalizeSupplyLine(raw: Record<string, unknown>): SupplyExpenseLine {
   const sku = raw.productSku;
+  const reflectedQty = normalizeNullableNumber(raw.reflectedQty);
   return {
     id: String(raw.id ?? ""),
     paymentDate: String(raw.paymentDate ?? ""),
@@ -218,6 +219,7 @@ function normalizeSupplyLine(raw: Record<string, unknown>): SupplyExpenseLine {
     ...normalizePurchaseLineBankFields(raw),
     ...normalizePurchaseLineVendorFields(raw),
     ...(typeof sku === "string" && sku ? { productSku: sku } : {}),
+    ...(reflectedQty != null && reflectedQty > 0 ? { reflectedQty } : {}),
   };
 }
 
