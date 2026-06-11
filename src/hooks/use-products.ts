@@ -26,12 +26,30 @@ import {
 import { toYearMonthParam } from "@/lib/ledger-period";
 import type { ProductHistoryFilterId } from "@/lib/product-unified-history";
 import type { ProductStockStatus } from "@/types/dashboard";
-import type { InventoryProduct, InventoryProductInput } from "@/types/inventory-product";
+import type {
+  InventoryProduct,
+  InventoryProductInput,
+  InventoryProductKind,
+} from "@/types/inventory-product";
 
 export const PRODUCTS_QUERY_KEY = ["products"] as const;
 
 function getErrorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.message;
+  if (error instanceof ApiError) {
+    if (error.code === "PRODUCT_KIND_LOCKED") {
+      return (
+        error.message ||
+        "매입·매출 이력이 있어 상품 유형을 변경할 수 없습니다."
+      );
+    }
+    if (error.code === "PRODUCT_KIND_MISMATCH") {
+      return error.message || "선택한 SKU의 상품 유형이 일치하지 않습니다.";
+    }
+    if (error.code === "SUPPLY_NOT_SALEABLE") {
+      return error.message || "부가·소모품은 매출 품목으로 등록할 수 없습니다.";
+    }
+    return error.message;
+  }
   if (error instanceof Error) return error.message;
   return "요청에 실패했습니다.";
 }
@@ -40,6 +58,7 @@ export function productsListQueryKey(
   q?: string,
   page = 1,
   stockStatus?: ProductStockStatus | null,
+  productKind?: InventoryProductKind | null,
 ) {
   return [
     ...PRODUCTS_QUERY_KEY,
@@ -47,6 +66,7 @@ export function productsListQueryKey(
     q?.trim() ?? "",
     page,
     stockStatus ?? "",
+    productKind ?? "",
   ] as const;
 }
 
@@ -83,17 +103,23 @@ function invalidateProductHistoryQueries(
 export function useProductsList(
   searchQuery?: string,
   page = 1,
-  options?: { enabled?: boolean; stockStatus?: ProductStockStatus | null },
+  options?: {
+    enabled?: boolean;
+    stockStatus?: ProductStockStatus | null;
+    productKind?: InventoryProductKind | null;
+  },
 ) {
   const q = searchQuery?.trim() ?? "";
   const safePage = Math.max(1, page);
   const stockStatus = options?.stockStatus ?? null;
+  const productKind = options?.productKind ?? null;
   return useQuery({
-    queryKey: productsListQueryKey(q, safePage, stockStatus),
+    queryKey: productsListQueryKey(q, safePage, stockStatus, productKind),
     queryFn: async () => {
       const result = await fetchProducts({
         ...(q ? { q } : {}),
         ...(stockStatus ? { stockStatus } : {}),
+        ...(productKind ? { productKind } : {}),
         page: safePage,
         limit: PRODUCTS_LIST_PAGE_SIZE,
       });

@@ -1,0 +1,81 @@
+# FE 연동 — productKind (판매상품 / 부가·소모품)
+
+BE 배포 후 `products.product_kind` 마이그레이션(`20260606300000_product_kind.sql`) 적용 필요.
+
+---
+
+## 1. 상품관리 목록 `GET /products`
+
+**쿼리**
+
+| 파라미터 | 값 | 용도 |
+|----------|-----|------|
+| `productKind` | `product` \| `supply` | 유형 필터 (생략=전체) |
+
+필터 칩 예: `전체` / `판매상품` (`productKind=product`) / `부가·소모품` (`productKind=supply`)
+
+**응답**
+
+- 각 항목에 `productKind` 필수 (`product` | `supply`)
+- `meta.productCount`, `meta.supplyCount` — 필터 칩 옆 개수 표시용 (필터와 무관, 전체 기준)
+
+**카드 UI**
+
+- `supply` → 「부가·소모품」 뱃지 표시 권장
+
+---
+
+## 2. 상품 등록·수정
+
+**`POST /products`**
+
+```json
+{ "sku": "...", "name": "...", "productKind": "supply", "currentPrice": 500 }
+```
+
+- `productKind` 생략 시 `product` (판매상품)
+- 상품관리 등록 모달에서만 유형 선택
+
+**`PATCH /products/:id`**
+
+- `productKind` 변경 가능 (매입/부가 재고반영·매출 차감 이력 전까지)
+- 이력 있으면 `409 PRODUCT_KIND_LOCKED`
+
+---
+
+## 3. 재고반영 모달
+
+| 경로 | BE 동작 |
+|------|---------|
+| `POST /purchase/products/:id/stock-reflect` | 연결 SKU → `product` 고정 |
+| `POST /purchase/supply/:id/stock-reflect` | 연결 SKU → `supply` 고정 |
+
+- 재고반영 UI에서 유형 선택 **불필요** (read-only)
+- 부가 경로에서 **신규 상품 등록** 시 `POST /products` body에 `productKind: "supply"` 전송
+- 상품매입 경로 신규 등록은 `productKind` 생략 또는 `"product"`
+
+유형 불일치·이력 충돌 시 `409 PRODUCT_KIND_MISMATCH`
+
+---
+
+## 4. 매출 등록
+
+**품목 피커**
+
+```
+GET /products?active=true&productKind=product&limit=100
+```
+
+- `supply`는 BE 필터로 제외 — FE에서 이름/SKU 규칙으로 걸러내지 말 것
+
+**주문 저장 `POST /sales`**
+
+- `supply` 상품 ID를 넣으면 `400 SUPPLY_NOT_SALEABLE`
+
+---
+
+## 5. 재고 이력 (선택)
+
+`GET /products/:id/stock-history` — `source=purchase` 항목에 `purchaseType` (`product` | `supply`) 제공.
+
+미제공 항목은 응답 상품의 `productKind`로 1차 구분.

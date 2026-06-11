@@ -92,6 +92,7 @@ export function SupplyExpensePanel() {
       subtitle: stockReflectLine.vendor || undefined,
       quantity: stockReflectLine.quantity,
       lineContext: {
+        productKind: "supply" as const,
         itemName: stockReflectLine.itemName,
         paymentAmount: stockReflectLine.paymentAmount,
         quantity: stockReflectLine.quantity,

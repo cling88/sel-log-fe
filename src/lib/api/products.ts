@@ -10,7 +10,9 @@ import type {
   InventoryPriceHistoryItem,
   InventoryProduct,
   InventoryProductInput,
+  InventoryProductKind,
   InventoryProductStockAction,
+  InventoryPurchaseType,
   InventoryStockHistoryItem,
   InventoryStockHistorySource,
   ProductChangeFrom,
@@ -32,6 +34,8 @@ export type ProductsListMeta = {
   limit: number;
   outOfStockCount?: number;
   lowStockCount?: number;
+  productCount?: number;
+  supplyCount?: number;
 };
 
 export type ProductsListResult = {
@@ -96,7 +100,24 @@ function normalizeListMeta(
     ...(typeof meta?.lowStockCount === "number"
       ? { lowStockCount: meta.lowStockCount }
       : {}),
+    ...(typeof meta?.productCount === "number"
+      ? { productCount: meta.productCount }
+      : {}),
+    ...(typeof meta?.supplyCount === "number"
+      ? { supplyCount: meta.supplyCount }
+      : {}),
   };
+}
+
+function normalizeProductKind(value: unknown): InventoryProductKind {
+  return value === "supply" ? "supply" : "product";
+}
+
+function normalizePurchaseType(
+  value: unknown,
+): InventoryPurchaseType | undefined {
+  if (value === "product" || value === "supply") return value;
+  return undefined;
 }
 
 function normalizeOptionalNumber(value: unknown): number | undefined {
@@ -150,6 +171,7 @@ function normalizeStockHistoryItem(
     atIso: String(raw.atIso ?? ""),
     delta: Number(raw.delta) || 0,
     source: normalizeStockHistorySource(raw.source),
+    purchaseType: normalizePurchaseType(raw.purchaseType),
     vendor: normalizeOptionalString(raw.vendor),
     orderNo: normalizeOptionalString(raw.orderNo),
     unitPrice: normalizeOptionalNumber(raw.unitPrice),
@@ -264,6 +286,7 @@ export function normalizeProduct(raw: Record<string, unknown>): InventoryProduct
     id: String(raw.id ?? ""),
     sku: String(raw.sku ?? ""),
     name: String(raw.name ?? ""),
+    productKind: normalizeProductKind(raw.productKind),
     ...(category ? { category } : {}),
     imageUrl: normalizeImageUrl(raw.imageUrl),
     memo: normalizeOptionalString(raw.memo) ?? "",
@@ -287,9 +310,12 @@ export function toCreateProductPayload(input: InventoryProductInput) {
   const imageUrl = input.imageUrl?.trim();
   const category = input.category?.trim();
 
+  const productKind = input.productKind ?? "product";
+
   return {
     sku: input.sku.trim(),
     name: input.name.trim(),
+    ...(productKind === "supply" ? { productKind: "supply" as const } : {}),
     ...(category ? { category } : {}),
     ...(imageUrl ? { imageUrl } : {}),
     memo: input.memo?.trim() ?? "",
@@ -304,6 +330,7 @@ export type FetchProductsParams = {
   q?: string;
   active?: boolean;
   stockStatus?: ProductStockStatus | ProductStockStatus[];
+  productKind?: InventoryProductKind;
   page?: number;
   limit?: number;
 };
@@ -321,6 +348,7 @@ export async function fetchProducts(
       : [params.stockStatus];
     search.set("stockStatus", values.join(","));
   }
+  if (params?.productKind) search.set("productKind", params.productKind);
   search.set("page", String(params?.page ?? DEFAULT_LIST_PAGE));
   search.set("limit", String(params?.limit ?? PRODUCTS_LIST_PAGE_SIZE));
 
@@ -513,8 +541,11 @@ export function toUpdateProductPayload(input: InventoryProductInput) {
   const category = input.category?.trim();
   const imageUrl = input.imageUrl?.trim();
 
+  const productKind = input.productKind ?? "product";
+
   return {
     name: input.name.trim(),
+    productKind,
     ...(category ? { category } : {}),
     ...(imageUrl ? { imageUrl } : {}),
     memo: input.memo?.trim() ?? "",

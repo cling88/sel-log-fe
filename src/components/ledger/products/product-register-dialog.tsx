@@ -32,6 +32,7 @@ import type { InventoryProduct, InventoryProductInput } from "@/types/inventory-
 const EMPTY_FORM: InventoryProductInput = {
   sku: "",
   name: "",
+  productKind: "product",
   category: "",
   imageUrl: "",
   memo: "",
@@ -55,6 +56,8 @@ export interface ProductRegisterDialogProps {
   recommendedPriceLabel?: string | null;
   /** true: 등록/저장 성공 alert 생략 (호출측 처리) */
   suppressSuccessAlert?: boolean;
+  /** 재고반영 경로 — 유형 고정(표시만) */
+  lockedProductKind?: InventoryProductInput["productKind"];
   onSave: (input: InventoryProductInput) => Promise<InventoryProduct | void>;
   categories: InventoryCategory[];
   selectedCategoryFromDialog: string;
@@ -74,6 +77,7 @@ export function ProductRegisterDialog({
   stockReflectQty,
   recommendedPriceLabel,
   suppressSuccessAlert = false,
+  lockedProductKind,
   onSave,
   categories,
   selectedCategoryFromDialog,
@@ -96,6 +100,7 @@ export function ProductRegisterDialog({
       setForm({
         sku: editProduct.sku,
         name: editProduct.name,
+        productKind: editProduct.productKind,
         category: editProduct.category ?? "",
         imageUrl: editProduct.imageUrl ?? "",
         memo: editProduct.memo ?? "",
@@ -111,11 +116,15 @@ export function ProductRegisterDialog({
     setForm({
       ...EMPTY_FORM,
       ...(initialForm ?? {}),
+      productKind:
+        lockedProductKind ??
+        initialForm?.productKind ??
+        EMPTY_FORM.productKind,
       stock: stockReflectRegistration ? 0 : Number(initialForm?.stock) || 0,
     });
     setImageError(null);
     setImageModalOpen(false);
-  }, [open, editProduct, initialForm, stockReflectRegistration]);
+  }, [open, editProduct, initialForm, stockReflectRegistration, lockedProductKind]);
 
   useEffect(() => {
     if (!open) return;
@@ -148,6 +157,7 @@ export function ProductRegisterDialog({
       ...form,
       sku: isEdit && editProduct ? editProduct.sku : sku,
       name,
+      productKind: lockedProductKind ?? form.productKind ?? "product",
       category: form.category?.trim() || "",
       memo: form.memo?.trim() || "",
       stock: stockReflectRegistration ? 0 : Number(form.stock) || 0,
@@ -230,6 +240,41 @@ export function ProductRegisterDialog({
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
+              <Label>상품 유형</Label>
+              {lockedProductKind || stockReflectRegistration ? (
+                <p className="text-sm text-[var(--color-text-secondary)]">
+                  {form.productKind === "supply"
+                    ? "부가·소모품"
+                    : "판매상품"}
+                  {stockReflectRegistration
+                    ? " · 재고반영 경로에 따라 자동 설정됩니다"
+                    : ""}
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={form.productKind === "product" ? "default" : "outline"}
+                    className="h-8"
+                    onClick={() => patch({ productKind: "product" })}
+                  >
+                    판매상품
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={form.productKind === "supply" ? "default" : "outline"}
+                    className="h-8"
+                    onClick={() => patch({ productKind: "supply" })}
+                  >
+                    부가·소모품
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="p-name">
                 상품명 <span className="text-[var(--color-danger)]">*</span>
               </Label>
@@ -296,7 +341,8 @@ export function ProductRegisterDialog({
             <div className="space-y-1.5 sm:col-span-2">
               <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
                 <Label htmlFor="p-price">
-                  판매가 <span className="text-[var(--color-danger)]">*</span>
+                  {form.productKind === "supply" ? "단가(참고)" : "판매가"}{" "}
+                  <span className="text-[var(--color-danger)]">*</span>
                 </Label>
                 {recommendedPriceLabel ? (
                   <span className="text-xs tabular-nums text-[var(--color-text-muted)]">

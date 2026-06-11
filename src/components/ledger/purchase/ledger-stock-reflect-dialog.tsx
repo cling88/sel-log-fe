@@ -102,9 +102,18 @@ export function LedgerStockReflectDialog({
   );
   const [confirming, setConfirming] = useState(false);
 
+  const reflectProductKind =
+    target?.lineContext?.productKind === "supply" ? "supply" : "product";
+
   const { data: productPickerData, isLoading: productsLoading } = useQuery({
-    queryKey: STOCK_REFLECT_PICKER_QUERY_KEY,
-    queryFn: () => fetchProducts({ page: 1, limit: 100, active: true }),
+    queryKey: [...STOCK_REFLECT_PICKER_QUERY_KEY, reflectProductKind],
+    queryFn: () =>
+      fetchProducts({
+        page: 1,
+        limit: 100,
+        active: true,
+        productKind: reflectProductKind,
+      }),
     enabled: open,
     staleTime: 60_000,
   });
@@ -376,9 +385,12 @@ export function LedgerStockReflectDialog({
         open={productRegisterOpen}
         onOpenChange={setProductRegisterOpen}
         initialForm={productPrefill}
+        lockedProductKind={reflectProductKind}
         stockReflectRegistration
         stockReflectQty={qty}
-        recommendedPriceLabel={recommendedPriceLabel}
+        recommendedPriceLabel={
+          reflectProductKind === "product" ? recommendedPriceLabel : null
+        }
         suppressSuccessAlert
         onSave={handleQuickProductSave}
         saving={createProduct.isPending}

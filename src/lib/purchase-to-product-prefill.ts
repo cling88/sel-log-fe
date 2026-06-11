@@ -6,7 +6,10 @@ import {
   type MarginRateRange,
 } from "@/lib/purchase-product-calc";
 import { DEFAULT_USER_SETTINGS } from "@/types/settings";
-import type { InventoryProductInput } from "@/types/inventory-product";
+import type {
+  InventoryProductInput,
+  InventoryProductKind,
+} from "@/types/inventory-product";
 
 export type StockReflectPricingContext = {
   totalOrder: number;
@@ -27,6 +30,7 @@ export type StockReflectLineContext = {
   memo?: string;
   /** 상품매입 — 구매처 그룹 기준 최종개당 계산용 */
   pricing?: StockReflectPricingContext;
+  productKind?: InventoryProductKind;
 };
 
 function isHttpUrl(value: string): boolean {
@@ -91,6 +95,7 @@ export function buildProductPrefillFromPurchaseLine(
   return {
     sku: "",
     name,
+    productKind: ctx.productKind ?? "product",
     category: "",
     imageUrl: imageUrl && isHttpUrl(imageUrl) ? imageUrl : "",
     memo: buildMemo(ctx),

@@ -1012,6 +1012,9 @@ export function getPurchaseErrorMessage(error: unknown): string {
     if (error.code === "INVALID_QUERY") {
       return error.message || "month와 year는 동시에 보낼 수 없습니다.";
     }
+    if (error.code === "PRODUCT_KIND_MISMATCH") {
+      return error.message || "선택한 SKU의 상품 유형이 일치하지 않습니다.";
+    }
     return error.message;
   }
   if (error instanceof Error) return error.message;

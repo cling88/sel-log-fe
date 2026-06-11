@@ -835,7 +835,13 @@ export function SaleTabPanel() {
 
   const { data: productsData } = useQuery({
     queryKey: PRODUCTS_PICKER_QUERY_KEY,
-    queryFn: () => fetchProducts({ active: true, limit: 100, page: 1 }),
+    queryFn: () =>
+      fetchProducts({
+        active: true,
+        productKind: "product",
+        limit: 100,
+        page: 1,
+      }),
     staleTime: 60_000,
   });
 

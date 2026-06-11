@@ -125,6 +125,7 @@ export function ProductPurchasePanel() {
         .join(" · "),
       quantity: stockReflectLine.quantity,
       lineContext: {
+        productKind: "product" as const,
         productName: stockReflectLine.productName,
         imageUrl: stockReflectLine.imageUrl,
         paymentAmount: stockReflectLine.paymentAmount,

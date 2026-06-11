@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { replaceLedgerQuery } from "@/lib/ledger-url";
 import { Button } from "@/components/ui/button";
@@ -62,11 +62,33 @@ import type {
 } from "@/types/inventory-product";
 import type { InventoryCategory } from "@/types/inventory-category";
 import type { ProductStockStatus } from "@/types/dashboard";
+import type { InventoryProductKind } from "@/types/inventory-product";
 
-function stockFilterEmptyMessage(status: ProductStockStatus): string {
-  if (status === "out_of_stock") return "품절 상품이 없습니다.";
-  if (status === "low_stock") return "품절임박 상품이 없습니다.";
-  return "재고 있는 상품이 없습니다.";
+type ProductListFilterId =
+  | "all"
+  | "out_of_stock"
+  | "in_stock"
+  | "product"
+  | "supply";
+
+const PRODUCT_LIST_FILTER_PARAM = "productFilter";
+
+function resolveProductListFilter(
+  param: string | null,
+): ProductListFilterId {
+  if (param === "out_of_stock") return "out_of_stock";
+  if (param === "in_stock") return "in_stock";
+  if (param === "product") return "product";
+  if (param === "supply") return "supply";
+  return "all";
+}
+
+function productListFilterEmptyMessage(filter: ProductListFilterId): string {
+  if (filter === "out_of_stock") return "품절 상품이 없습니다.";
+  if (filter === "in_stock") return "재고 있는 상품이 없습니다.";
+  if (filter === "supply") return "부가 상품이 없습니다.";
+  if (filter === "product") return "판매 상품이 없습니다.";
+  return "표시할 상품이 없습니다.";
 }
 
 function productStatusLabel(p: InventoryProduct) {
@@ -97,8 +119,15 @@ function formatHistoryDateTime(iso: string) {
   return hhmm ? `${y}년 ${m}월 ${d}일 ${hhmm}` : `${y}년 ${m}월 ${d}일`;
 }
 
-function stockHistorySourceLabel(source?: "purchase" | "sale" | "manual_adjust") {
-  if (source === "purchase") return "매입";
+function stockHistorySourceLabel(
+  source?: "purchase" | "sale" | "manual_adjust",
+  purchaseType?: InventoryProduct["stockHistory"][number]["purchaseType"],
+  productKind?: InventoryProductKind,
+) {
+  if (source === "purchase") {
+    if (purchaseType === "supply" || productKind === "supply") return "부가 반영";
+    return "매입";
+  }
   if (source === "sale") return "매출";
   return "수동조정";
 }
@@ -112,9 +141,10 @@ function priceHistorySourceLabel(source: InventoryPriceHistoryItem["source"]) {
 function stockEventTitle(
   h: InventoryStockHistoryItem,
   source: "purchase" | "sale" | "manual_adjust",
+  productKind?: InventoryProductKind,
 ) {
   if (source === "manual_adjust") return h.reason?.trim() || "수동조정";
-  return stockHistorySourceLabel(source);
+  return stockHistorySourceLabel(source, h.purchaseType, productKind);
 }
 
 interface StockAdjustDialogProps {
@@ -271,25 +301,36 @@ export function ProductsTabPanel() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const stockStatusParam = searchParams.get("stockStatus");
-  const stockStatus = useMemo((): ProductStockStatus | null => {
+  const legacyStockStatus = searchParams.get("stockStatus");
+  const productFilterParam = searchParams.get(PRODUCT_LIST_FILTER_PARAM);
+  const productListFilter = useMemo((): ProductListFilterId => {
+    if (productFilterParam) return resolveProductListFilter(productFilterParam);
     if (
-      stockStatusParam === "out_of_stock" ||
-      stockStatusParam === "low_stock" ||
-      stockStatusParam === "in_stock"
+      legacyStockStatus === "out_of_stock" ||
+      legacyStockStatus === "in_stock"
     ) {
-      return stockStatusParam;
+      return legacyStockStatus;
     }
+    return "all";
+  }, [productFilterParam, legacyStockStatus]);
+
+  const stockStatusForApi = useMemo((): ProductStockStatus | null => {
+    if (productListFilter === "out_of_stock") return "out_of_stock";
+    if (productListFilter === "in_stock") return "in_stock";
     return null;
-  }, [stockStatusParam]);
+  }, [productListFilter]);
+
+  const productKindForApi = useMemo((): InventoryProductKind | null => {
+    if (productListFilter === "product") return "product";
+    if (productListFilter === "supply") return "supply";
+    return null;
+  }, [productListFilter]);
 
   const { alert, confirm } = useAppDialog();
   const { search, committedSearch, setSearch, applySearch } = useLedgerUrlSearch({
     commit: "manual",
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  /** 탭 최초 진입 시 목록 첫 상품 1회 자동 선택 */
-  const autoSelectedOnEntryRef = useRef(false);
 
   const [registerOpen, setRegisterOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<InventoryProduct | null>(null);
@@ -320,10 +361,11 @@ export function ProductsTabPanel() {
   const [stockDialogOpen, setStockDialogOpen] = useState(false);
   const [listPage, setListPage] = useState(1);
 
-  const setStockStatusFilter = (next: ProductStockStatus | null) => {
+  const setProductListFilter = (next: ProductListFilterId) => {
     replaceLedgerQuery(router, pathname, searchParams, (params) => {
-      if (next) params.set("stockStatus", next);
-      else params.delete("stockStatus");
+      if (next === "all") params.delete(PRODUCT_LIST_FILTER_PARAM);
+      else params.set(PRODUCT_LIST_FILTER_PARAM, next);
+      params.delete("stockStatus");
     });
     setListPage(1);
   };
@@ -336,14 +378,13 @@ export function ProductsTabPanel() {
 
   useEffect(() => {
     setListPage(1);
-  }, [committedSearch, stockStatus]);
+  }, [committedSearch, productListFilter]);
 
   const hasCommittedSearch = committedSearch.trim().length > 0;
 
   const submitProductSearch = (query?: string) => {
     applySearch(query);
     setListPage(1);
-    setSelectedId(null);
   };
 
   const clearProductSearch = () => {
@@ -356,7 +397,10 @@ export function ProductsTabPanel() {
     isError: productsLoadError,
     error: productsError,
     refetch: refetchProducts,
-  } = useProductsList(committedSearch, listPage, { stockStatus });
+  } = useProductsList(committedSearch, listPage, {
+    stockStatus: stockStatusForApi,
+    productKind: productKindForApi,
+  });
 
   const products = productsListData?.items ?? [];
   const productsMeta = productsListData?.meta;
@@ -365,7 +409,7 @@ export function ProductsTabPanel() {
   /** 등록 상품 0개(검색·재고 필터 없이 목록 조회) — 등록 유도 화면만 */
   const showCatalogEmpty =
     !hasCommittedSearch &&
-    stockStatus == null &&
+    productListFilter === "all" &&
     !productsLoading &&
     !productsLoadError &&
     listTotal === 0;
@@ -419,18 +463,15 @@ export function ProductsTabPanel() {
 
   const filtered = visibleProducts;
 
+  /** 탭·검색·페이지 변경 후 목록 첫 상품 자동 선택 */
   useEffect(() => {
-    if (autoSelectedOnEntryRef.current) return;
     if (productsLoading || productsLoadError || showCatalogEmpty) return;
-
     const first = visibleProducts[0];
-    if (!first) return;
-
-    setSelectedId((current) => {
-      autoSelectedOnEntryRef.current = true;
-      return current ?? first.id;
-    });
+    setSelectedId(first?.id ?? null);
   }, [
+    productListFilter,
+    committedSearch,
+    listPage,
     productsLoading,
     productsLoadError,
     showCatalogEmpty,
@@ -571,14 +612,22 @@ export function ProductsTabPanel() {
         </div>
       );
     }
+    if (showCatalogEmpty) {
+      return (
+        <LedgerEmptyState
+          title="상품관리"
+          description="상품을 등록하고, 재고를 조정해 운영하세요."
+          actionLabel="+ 상품 등록하기"
+          onAction={openRegister}
+        />
+      );
+    }
     if (filtered.length === 0) {
       return (
         <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
           {hasCommittedSearch
             ? "검색 결과가 없습니다."
-            : stockStatus
-              ? stockFilterEmptyMessage(stockStatus)
-              : "표시할 상품이 없습니다."}
+            : productListFilterEmptyMessage(productListFilter)}
         </p>
       );
     }
@@ -615,21 +664,28 @@ export function ProductsTabPanel() {
                               >
                                 {p.name}
                               </p>
-                              <span
-                                className={cn(
-                                  "rounded-full border px-2 py-0.5 text-[11px] text-nowrap",
-                                  productStatusTone(p),
-                                )}
-                              >
-                                {productStatusLabel(p)}
-                              </span>
+                              <div className="flex shrink-0 items-center gap-1">
+                                {p.productKind === "supply" ? (
+                                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                                    부가·소모품
+                                  </span>
+                                ) : null}
+                                <span
+                                  className={cn(
+                                    "rounded-full border px-2 py-0.5 text-[11px] text-nowrap",
+                                    productStatusTone(p),
+                                  )}
+                                >
+                                  {productStatusLabel(p)}
+                                </span>
+                              </div>
                             </div>
                             <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
                               SKU {p.sku} · 안전 {p.safetyStock} · 재고{" "}
                               <span className="tabular-nums font-medium text-[var(--color-text-primary)]">
                                 {p.stock}
                               </span>
-                              {" · 판매가 "}
+                              {p.productKind === "supply" ? " · 단가 " : " · 판매가 "}
                               <span className="tabular-nums font-medium text-[var(--color-text-primary)]">
                                 {formatAmount(p.currentPrice ?? 0)}원
                               </span>
@@ -644,66 +700,63 @@ export function ProductsTabPanel() {
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-start">
       <div className="w-full md:w-[420px]">
-        {showCatalogEmpty ? (
-          <LedgerEmptyState
-            title="상품관리"
-            description="상품을 등록하고, 재고를 조정해 운영하세요."
-            actionLabel="+ 상품 등록하기"
-            onAction={openRegister}
+        <LedgerListShell>
+          <PurchaseListToolbar
+            embedded
+            search={search}
+            onSearchChange={setSearch}
+            searchSubmitMode
+            onSearchSubmit={() => submitProductSearch()}
+            onSearchClear={clearProductSearch}
+            searchPlaceholder="상품명, SKU 검색"
+            registerLabel="+ 상품 등록"
+            onRegister={openRegister}
           />
-        ) : (
-          <LedgerListShell>
-            <PurchaseListToolbar
-              embedded
-              search={search}
-              onSearchChange={setSearch}
-              searchSubmitMode
-              onSearchSubmit={() => submitProductSearch()}
-              onSearchClear={clearProductSearch}
-              searchPlaceholder="상품명, SKU 검색"
-              registerLabel="+ 상품 등록"
-              onRegister={openRegister}
-            />
-            <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)]/80 px-3 py-2">
-              {(
-                [
-                  { id: null, label: "전체" },
-                  { id: "out_of_stock" as const, label: "품절" },
-                  { id: "low_stock" as const, label: "품절임박" },
-                  { id: "in_stock" as const, label: "재고 있음" },
-                ] as const
-              ).map((chip) => (
-                <Button
-                  key={chip.label}
-                  type="button"
-                  size="sm"
-                  variant={stockStatus === chip.id ? "default" : "outline"}
-                  className="h-7 text-xs"
-                  onClick={() => setStockStatusFilter(chip.id)}
-                >
-                  {chip.label}
-                  {chip.id === "out_of_stock" &&
-                  productsMeta?.outOfStockCount != null
-                    ? ` ${productsMeta.outOfStockCount}`
-                    : ""}
-                  {chip.id === "low_stock" && productsMeta?.lowStockCount != null
-                    ? ` ${productsMeta.lowStockCount}`
-                    : ""}
-                </Button>
-              ))}
+          <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)]/80 px-3 py-2">
+            {(
+              [
+                { id: "all" as const, label: "전체" },
+                { id: "out_of_stock" as const, label: "품절" },
+                { id: "in_stock" as const, label: "재고있음" },
+                { id: "product" as const, label: "판매상품" },
+                { id: "supply" as const, label: "부가상품" },
+              ] as const
+            ).map((chip) => (
+              <Button
+                key={chip.id}
+                type="button"
+                size="sm"
+                variant={
+                  productListFilter === chip.id ? "default" : "outline"
+                }
+                className="h-7 text-xs"
+                onClick={() => setProductListFilter(chip.id)}
+              >
+                {chip.label}
+                {chip.id === "out_of_stock" &&
+                productsMeta?.outOfStockCount != null
+                  ? ` ${productsMeta.outOfStockCount}`
+                  : ""}
+                {chip.id === "product" && productsMeta?.productCount != null
+                  ? ` ${productsMeta.productCount}`
+                  : ""}
+                {chip.id === "supply" && productsMeta?.supplyCount != null
+                  ? ` ${productsMeta.supplyCount}`
+                  : ""}
+              </Button>
+            ))}
+          </div>
+          <div className={ledgerListBodyClass}>{renderListBody()}</div>
+          {!productsLoading && !productsLoadError && !showCatalogEmpty ? (
+            <div className={ledgerListFooterClass}>
+              <PurchaseListPagination
+                page={listCurrentPage}
+                totalPages={listTotalPages}
+                onPageChange={setListPage}
+              />
             </div>
-            <div className={ledgerListBodyClass}>{renderListBody()}</div>
-            {!productsLoading && !productsLoadError ? (
-              <div className={ledgerListFooterClass}>
-                <PurchaseListPagination
-                  page={listCurrentPage}
-                  totalPages={listTotalPages}
-                  onPageChange={setListPage}
-                />
-              </div>
-            ) : null}
-          </LedgerListShell>
-        )}
+          ) : null}
+        </LedgerListShell>
       </div>
 
       <div className="w-full flex-1">
@@ -742,7 +795,13 @@ export function ProductsTabPanel() {
                     </p>
                     <p className="text-xs text-[var(--color-text-secondary)]">
                       SKU {selectedProduct.sku}
-                      {selectedProduct.category ? ` · ${selectedProduct.category}` : ""}
+                      {selectedProduct.category
+                        ? ` · ${selectedProduct.category}`
+                        : ""}
+                      {" · "}
+                      {selectedProduct.productKind === "supply"
+                        ? "부가·소모품"
+                        : "판매상품"}
                     </p>
                   </div>
                 </div>
@@ -792,7 +851,9 @@ export function ProductsTabPanel() {
                   </p>
                 </div>
                 <div className="rounded-xl border border-[var(--color-border)] bg-white p-3">
-                  <p className="text-xs text-[var(--color-text-secondary)]">판매가</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">
+                    {selectedProduct.productKind === "supply" ? "단가(참고)" : "판매가"}
+                  </p>
                   <p className="mt-1 text-lg font-semibold tabular-nums">
                     {formatAmount(selectedProduct.currentPrice ?? 0)}원
                   </p>
@@ -890,6 +951,7 @@ export function ProductsTabPanel() {
                                 {stockEventTitle(
                                   entry.data,
                                   resolveStockHistorySource(entry.data),
+                                  selectedProduct.productKind,
                                 )}
                               </span>
                               <span
