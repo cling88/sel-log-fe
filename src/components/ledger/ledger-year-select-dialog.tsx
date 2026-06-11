@@ -16,6 +16,7 @@ interface LedgerYearSelectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   year: number;
+  yearOptions?: number[];
   onSelectYear: (year: number) => void;
 }
 
@@ -23,9 +24,10 @@ export function LedgerYearSelectDialog({
   open,
   onOpenChange,
   year,
+  yearOptions: yearOptionsProp,
   onSelectYear,
 }: LedgerYearSelectDialogProps) {
-  const yearOptions = listYearOptions();
+  const yearOptions = yearOptionsProp ?? listYearOptions();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

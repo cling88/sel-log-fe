@@ -457,7 +457,7 @@ export function ProductPurchaseRegisterDialog({
 
             {previewUnit != null ? (
               <p className="text-sm text-[var(--color-text-secondary)] sm:col-span-2">
-                개당금액(미리보기):{" "}
+                개당금액:{" "}
                 <span className="font-medium tabular-nums text-[var(--color-text-primary)]">
                   {formatAmount(previewUnit)}원
                 </span>

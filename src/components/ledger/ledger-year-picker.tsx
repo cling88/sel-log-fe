@@ -8,6 +8,7 @@ import { LedgerYearSelectDialog } from "@/components/ledger/ledger-year-select-d
 import {
   ledgerEarliestMonthQueryKey,
 } from "@/hooks/use-ledger-earliest-month";
+import { useLedgerMinYear } from "@/hooks/use-ledger-min-year";
 import { fetchLedgerEarliestMonth } from "@/lib/api/ledger";
 import {
   getTodayYearMonth,
@@ -54,7 +55,8 @@ export function LedgerYearPicker({ interactive = true }: LedgerYearPickerProps) 
 
   const [year, setYear] = useState(initial.year);
   const [yearDialogOpen, setYearDialogOpen] = useState(false);
-  const yearOptions = listYearOptions();
+  const { data: discoveredMinYear } = useLedgerMinYear(interactive);
+  const yearOptions = listYearOptions(discoveredMinYear);
   const { year: currentYear, month: currentMonth } = getTodayYearMonth();
   const minYear = yearOptions[0] ?? currentYear;
   const maxYear = currentYear;
@@ -73,7 +75,7 @@ export function LedgerYearPicker({ interactive = true }: LedgerYearPickerProps) 
       } else {
         const data = await queryClient.fetchQuery({
           queryKey: ledgerEarliestMonthQueryKey(clampedYear, apiTab),
-          queryFn: () => fetchLedgerEarliestMonth(clampedYear, apiTab),
+          queryFn: () => fetchLedgerEarliestMonth(apiTab, clampedYear),
         });
         const earliest = data.month ? parseYearMonth(data.month) : null;
         const nextMonth =
@@ -142,6 +144,7 @@ export function LedgerYearPicker({ interactive = true }: LedgerYearPickerProps) 
         open={interactive && yearDialogOpen}
         onOpenChange={(open) => interactive && setYearDialogOpen(open)}
         year={year}
+        yearOptions={yearOptions}
         onSelectYear={(y) => void applyYear(y)}
       />
     </>

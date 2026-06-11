@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { replaceLedgerQuery } from "@/lib/ledger-url";
+import { replaceLedgerQuery, applyPurchaseSubTabParams } from "@/lib/ledger-url";
 import { cn } from "@/lib/utils";
 import type { PurchaseSubTabId } from "@/types/common";
 
@@ -45,9 +45,9 @@ export function PurchaseSubTabs() {
     : "product";
 
   const setSub = (sub: PurchaseSubTabId) => {
+    if (sub === activeSub) return;
     replaceLedgerQuery(router, pathname, searchParams, (params) => {
-      params.set("tab", "purchase");
-      params.set("purchaseSub", sub);
+      applyPurchaseSubTabParams(params, sub);
     });
   };
 

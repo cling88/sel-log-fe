@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 import {
   fetchLedgerEarliestMonth,
+  LEDGER_MIN_YEAR_QUERY_KEY,
   type LedgerEarliestMonthTab,
 } from "@/lib/api/ledger";
 
@@ -35,6 +36,7 @@ export function invalidateLedgerEarliestMonth(
       query.queryKey[1] === "earliest-month" &&
       query.queryKey[3] === tab,
   });
+  void queryClient.invalidateQueries({ queryKey: LEDGER_MIN_YEAR_QUERY_KEY });
 }
 
 export function useLedgerEarliestMonth(
@@ -43,7 +45,7 @@ export function useLedgerEarliestMonth(
 ) {
   return useQuery({
     queryKey: ledgerEarliestMonthQueryKey(year, tab ?? "purchase"),
-    queryFn: () => fetchLedgerEarliestMonth(year, tab!),
+    queryFn: () => fetchLedgerEarliestMonth(tab!, year),
     enabled: tab != null,
     staleTime: 60_000,
   });

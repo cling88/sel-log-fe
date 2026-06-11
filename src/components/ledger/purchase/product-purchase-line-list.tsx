@@ -196,9 +196,11 @@ function TruncatedText({
   );
 }
 
+const desktopRowGridClass = "col-span-full grid grid-cols-subgrid";
+
 function DesktopHeader() {
   return (
-    <div role="row" className="contents">
+    <div role="row" className={desktopRowGridClass}>
       <div className={cn(headerCellClass, "justify-center")} role="columnheader">
         번호
       </div>
@@ -245,24 +247,9 @@ function DesktopHeader() {
   );
 }
 
-function clickableCellProps(
-  lineId: string,
-  onLineClick: (lineId: string) => void,
-  groupDisabled: boolean | undefined,
-  rowBg: string,
-  rowBorder: string,
-  stockPending: boolean,
-  extra?: string,
-) {
+function bodyCellProps(extra?: string) {
   return {
-    className: cn(
-      bodyCellClass,
-      rowBg,
-      rowBorder,
-      purchaseProductLineClickClass(groupDisabled, stockPending),
-      extra,
-    ),
-    ...lineRowClickHandlers(lineId, onLineClick, groupDisabled),
+    className: cn(bodyCellClass, extra),
   };
 }
 
@@ -298,70 +285,40 @@ function DesktopRow({
 
   const pending = !line.stockReflected && !groupDisabled;
   const rowBg = purchaseProductStockPendingBgClass(pending);
-  const rowBorder = index > 0 ? "border-t border-[var(--color-border)]/35" : "";
 
   return (
-    <div role="row" className="contents">
+    <div
+      role="row"
+      className={cn(
+        desktopRowGridClass,
+        rowBg,
+        index > 0 && "border-t border-[var(--color-border)]/35",
+        purchaseProductLineClickClass(groupDisabled, pending),
+      )}
+      {...lineRowClickHandlers(line.id, onLineClick, groupDisabled)}
+    >
       <div
-        {...clickableCellProps(
-          line.id,
-          onLineClick,
-          groupDisabled,
-          rowBg,
-          rowBorder,
-          pending,
+        {...bodyCellProps(
           "justify-center tabular-nums text-[var(--color-text-muted)]",
         )}
       >
         {index + 1}
       </div>
       <div
-        {...clickableCellProps(
-          line.id,
-          onLineClick,
-          groupDisabled,
-          rowBg,
-          rowBorder,
-          pending,
+        {...bodyCellProps(
           cn(truncateCellClass, "text-[var(--color-text-secondary)]"),
         )}
       >
         <TruncatedText value={line.orderNo} />
       </div>
-      <div
-        {...clickableCellProps(
-          line.id,
-          onLineClick,
-          groupDisabled,
-          rowBg,
-          rowBorder,
-          pending,
-          "justify-center px-1",
-        )}
-      >
+      <div {...bodyCellProps("justify-center px-1")}>
         <ProductImageThumb imageUrl={line.imageUrl} />
       </div>
-      <div
-        {...clickableCellProps(
-          line.id,
-          onLineClick,
-          groupDisabled,
-          rowBg,
-          rowBorder,
-          pending,
-          truncateCellClass,
-        )}
-      >
+      <div {...bodyCellProps(truncateCellClass)}>
         <ProductNameCell name={line.productName} href={line.productLink} />
       </div>
       <div
-        {...clickableCellProps(
-          line.id,
-          onLineClick,
-          groupDisabled,
-          rowBg,
-          rowBorder,
-          pending,
+        {...bodyCellProps(
           cn(truncateCellClass, "text-[var(--color-text-secondary)]"),
         )}
       >
@@ -373,28 +330,12 @@ function DesktopRow({
         />
       </div>
       <div
-        {...clickableCellProps(
-          line.id,
-          onLineClick,
-          groupDisabled,
-          rowBg,
-          rowBorder,
-          pending,
-          "justify-end whitespace-nowrap tabular-nums",
-        )}
+        {...bodyCellProps("justify-end whitespace-nowrap tabular-nums")}
       >
         {line.quantity}
       </div>
       <div
-        {...clickableCellProps(
-          line.id,
-          onLineClick,
-          groupDisabled,
-          rowBg,
-          rowBorder,
-          pending,
-          "justify-end whitespace-nowrap tabular-nums",
-        )}
+        {...bodyCellProps("justify-end whitespace-nowrap tabular-nums")}
       >
         <AmendedAmount
           current={line.paymentAmount}
@@ -402,15 +343,7 @@ function DesktopRow({
         />
       </div>
       <div
-        {...clickableCellProps(
-          line.id,
-          onLineClick,
-          groupDisabled,
-          rowBg,
-          rowBorder,
-          pending,
-          "justify-end whitespace-nowrap tabular-nums",
-        )}
+        {...bodyCellProps("justify-end whitespace-nowrap tabular-nums")}
       >
         <AmendedAmount
           current={unitPrice}
@@ -418,26 +351,12 @@ function DesktopRow({
         />
       </div>
       <div
-        {...clickableCellProps(
-          line.id,
-          onLineClick,
-          groupDisabled,
-          rowBg,
-          rowBorder,
-          pending,
-          "justify-end whitespace-nowrap tabular-nums",
-        )}
+        {...bodyCellProps("justify-end whitespace-nowrap tabular-nums")}
       >
         {formatAmount(finalUnit)}원
       </div>
       <div
-        {...clickableCellProps(
-          line.id,
-          onLineClick,
-          groupDisabled,
-          rowBg,
-          rowBorder,
-          pending,
+        {...bodyCellProps(
           cn(truncateCellClass, "justify-end text-[var(--color-text-secondary)]"),
         )}
       >
@@ -448,7 +367,7 @@ function DesktopRow({
         />
       </div>
       <div
-        className={cn(bodyCellClass, rowBg, rowBorder, "justify-center")}
+        className={cn(bodyCellClass, "justify-center")}
         onClick={stopRowClickPropagation}
         onKeyDown={stopRowClickPropagation}
       >
@@ -461,26 +380,14 @@ function DesktopRow({
         />
       </div>
       <div
-        {...clickableCellProps(
-          line.id,
-          onLineClick,
-          groupDisabled,
-          rowBg,
-          rowBorder,
-          pending,
+        {...bodyCellProps(
           cn(truncateCellClass, "text-[var(--color-text-secondary)]"),
         )}
       >
         <TruncatedText value={formatPurchaseLineBankLabel(line)} />
       </div>
       <div
-        {...clickableCellProps(
-          line.id,
-          onLineClick,
-          groupDisabled,
-          rowBg,
-          rowBorder,
-          pending,
+        {...bodyCellProps(
           cn(truncateCellClass, "text-[var(--color-text-muted)]"),
         )}
       >

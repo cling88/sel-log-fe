@@ -77,6 +77,22 @@ export function toEarliestMonthTab(tab: LedgerTabId): LedgerEarliestMonthTab | n
 /** 퍼블 기준 장부 사용 시작 월 (추후 BE createdAt 연동) */
 export const PUB_LEDGER_START_YM = "2026-01";
 
+export function getPubLedgerStartYear() {
+  const [startYearStr] = PUB_LEDGER_START_YM.split("-");
+  return Number(startYearStr);
+}
+
+/** earliest-year API 결과 + PUB 폴백으로 년도 선택 하한 연도 */
+export function resolveLedgerMinYear(
+  earliestYear: number | null | undefined,
+): number {
+  const fallback = getPubLedgerStartYear();
+  if (earliestYear == null || !Number.isFinite(earliestYear)) {
+    return fallback;
+  }
+  return Math.min(earliestYear, fallback);
+}
+
 export function getTodayYearMonth() {
   const now = new Date();
   return { year: now.getFullYear(), month: now.getMonth() + 1 };
@@ -209,11 +225,17 @@ export function resolveSelectedMonthForTab(
   return resolveSelectedMonth(year, preferredMonth, tabs);
 }
 
-export function listYearOptions() {
+export function listYearOptions(minYear?: number) {
   const { year: currentYear } = getTodayYearMonth();
   const [startYearStr] = PUB_LEDGER_START_YM.split("-");
-  const startYear = Number(startYearStr);
-  return Array.from({ length: currentYear - startYear + 1 }, (_, i) => startYear + i);
+  const fallbackStartYear = Number(startYearStr);
+  const startYear = minYear ?? fallbackStartYear;
+  const resolvedStart = Math.min(startYear, currentYear);
+  if (resolvedStart > currentYear) return [currentYear];
+  return Array.from(
+    { length: currentYear - resolvedStart + 1 },
+    (_, i) => resolvedStart + i,
+  );
 }
 
 /** 장부 시작 월 ~ 이번 달 범위에서 이전/다음 달 (없으면 null) */

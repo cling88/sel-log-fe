@@ -1,6 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { replaceLedgerQuery } from "@/lib/ledger-url";
@@ -64,6 +70,8 @@ export function LedgerGlobalSearchDialog({
   const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [committedQ, setCommittedQ] = useState("");
+  const [highlightIndex, setHighlightIndex] = useState(-1);
+  const resultItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const { data, isFetching, isError, error } = useQuery({
     queryKey: [...LEDGER_SEARCH_QUERY_KEY, committedQ],
@@ -74,26 +82,85 @@ export function LedgerGlobalSearchDialog({
 
   const results = data?.items ?? [];
   const errorMessage = isError ? getLedgerSearchErrorMessage(error) : null;
+  const canNavigateResults = committedQ.length > 0 && !errorMessage && !isFetching;
+
+  const resetSearchState = useCallback(() => {
+    setQuery("");
+    setCommittedQ("");
+    setHighlightIndex(-1);
+  }, []);
+
+  const closeDialog = useCallback(() => {
+    resetSearchState();
+    onOpenChange(false);
+  }, [onOpenChange, resetSearchState]);
+
+  useEffect(() => {
+    if (!open) {
+      resetSearchState();
+    }
+  }, [open, resetSearchState]);
+
+  useEffect(() => {
+    setHighlightIndex(-1);
+  }, [committedQ]);
+
+  useEffect(() => {
+    if (highlightIndex < 0) return;
+    resultItemRefs.current[highlightIndex]?.scrollIntoView({
+      block: "nearest",
+    });
+  }, [highlightIndex]);
 
   const submitSearch = () => {
     const trimmed = query.trim();
     setCommittedQ(trimmed);
+    setHighlightIndex(-1);
   };
 
   const handleSelect = (result: LedgerGlobalSearchResult) => {
     navigateToSearchResult(router, pathname, searchParams, result, committedQ);
-    onOpenChange(false);
+    closeDialog();
+  };
+
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (!canNavigateResults || results.length === 0) return;
+      event.preventDefault();
+      setHighlightIndex((prev) => {
+        if (event.key === "ArrowDown") {
+          return prev < 0 ? 0 : Math.min(prev + 1, results.length - 1);
+        }
+        return prev < 0 ? results.length - 1 : Math.max(prev - 1, 0);
+      });
+      return;
+    }
+
+    if (event.key === "Enter") {
+      if (highlightIndex >= 0 && results[highlightIndex]) {
+        event.preventDefault();
+        handleSelect(results[highlightIndex]);
+        return;
+      }
+      event.preventDefault();
+      submitSearch();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeDialog();
+    }
   };
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        onOpenChange(next);
         if (!next) {
-          setQuery("");
-          setCommittedQ("");
+          resetSearchState();
         }
+        onOpenChange(next);
       }}
     >
       <DialogContent
@@ -115,13 +182,11 @@ export function LedgerGlobalSearchDialog({
               autoFocus
               type="search"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  submitSearch();
-                }
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setHighlightIndex(-1);
               }}
+              onKeyDown={handleSearchKeyDown}
               placeholder="상품명, 주문번호, 항목명, SKU 등 (Enter로 검색)"
               className="h-10 pl-9"
             />
@@ -147,14 +212,18 @@ export function LedgerGlobalSearchDialog({
             </p>
           ) : (
             <ul className="space-y-1">
-              {results.map((result) => (
+              {results.map((result, index) => (
                 <li key={result.id}>
                   <button
+                    ref={(el) => {
+                      resultItemRefs.current[index] = el;
+                    }}
                     type="button"
                     onClick={() => handleSelect(result)}
                     className={cn(
                       "w-full rounded-lg px-3 py-2.5 text-left transition-colors",
                       "hover:bg-[var(--primary-50)]/60",
+                      highlightIndex === index && "bg-[var(--primary-100)]",
                     )}
                   >
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -184,7 +253,7 @@ export function LedgerGlobalSearchDialog({
         </div>
 
         <DialogFooter className={MODAL_DIALOG_FOOTER_CLASS}>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={closeDialog}>
             닫기
           </Button>
         </DialogFooter>

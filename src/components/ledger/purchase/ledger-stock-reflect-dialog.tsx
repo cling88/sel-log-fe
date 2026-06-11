@@ -1,7 +1,17 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type RefObject,
+} from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -64,6 +74,49 @@ const STOCK_REFLECT_PICKER_QUERY_KEY = [
   "stock-reflect-picker",
 ] as const;
 
+/** 모달(z-50) 위에 뜨는 SKU 피커 — Portal 고정 위치 */
+const SKU_PICKER_DROPDOWN_Z = 110;
+
+type AnchoredDropdownRect = {
+  top: number;
+  left: number;
+  width: number;
+};
+
+function useAnchoredDropdownRect(
+  anchorRef: RefObject<HTMLElement | null>,
+  open: boolean,
+) {
+  const [rect, setRect] = useState<AnchoredDropdownRect | null>(null);
+
+  const update = useCallback(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const box = el.getBoundingClientRect();
+    setRect({
+      top: box.bottom + 6,
+      left: box.left,
+      width: box.width,
+    });
+  }, [anchorRef]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setRect(null);
+      return;
+    }
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open, update]);
+
+  return rect;
+}
+
 export function LedgerStockReflectDialog({
   open,
   onOpenChange,
@@ -90,10 +143,14 @@ export function LedgerStockReflectDialog({
     [marginMinRate, marginMaxRate],
   );
   const skuSelectRef = useRef<HTMLDivElement | null>(null);
+  const skuDropdownRef = useRef<HTMLDivElement | null>(null);
+  const skuListItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [qty, setQty] = useState(1);
   const [selectedSku, setSelectedSku] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [skuSelectOpen, setSkuSelectOpen] = useState(false);
+  const [skuHighlightIndex, setSkuHighlightIndex] = useState(-1);
+  const skuDropdownRect = useAnchoredDropdownRect(skuSelectRef, skuSelectOpen);
   const [productRegisterOpen, setProductRegisterOpen] = useState(false);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [categoryForRegister, setCategoryForRegister] = useState("");
@@ -145,6 +202,7 @@ export function LedgerStockReflectDialog({
     setSelectedSku(null);
     setSearch("");
     setSkuSelectOpen(false);
+    setSkuHighlightIndex(-1);
     setProductRegisterOpen(false);
     setCategoryDialogOpen(false);
     setCategoryForRegister("");
@@ -153,10 +211,24 @@ export function LedgerStockReflectDialog({
   }, [open, target?.id, target?.quantity]);
 
   useEffect(() => {
+    if (!skuSelectOpen) {
+      setSkuHighlightIndex(-1);
+    }
+  }, [skuSelectOpen]);
+
+  useEffect(() => {
+    if (skuHighlightIndex < 0) return;
+    skuListItemRefs.current[skuHighlightIndex]?.scrollIntoView({
+      block: "nearest",
+    });
+  }, [skuHighlightIndex]);
+
+  useEffect(() => {
     if (!skuSelectOpen) return;
     const handleClickOutside = (event: MouseEvent) => {
-      if (!skuSelectRef.current) return;
-      if (skuSelectRef.current.contains(event.target as Node)) return;
+      const target = event.target as Node;
+      if (skuSelectRef.current?.contains(target)) return;
+      if (skuDropdownRef.current?.contains(target)) return;
       setSkuSelectOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -171,16 +243,13 @@ export function LedgerStockReflectDialog({
       p.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const adjustQty = (delta: number) => {
-    setQty((prev) => Math.max(1, prev + delta));
-  };
-
-  const selectedProduct = products.find((p) => p.sku === selectedSku);
+  const skuNavigableCount = 1 + filtered.length;
 
   const selectProductSku = (sku: string, name: string, fromQuickRegister = false) => {
     setSelectedSku(sku);
     setSearch(`${sku} | ${name}`);
     setSkuSelectOpen(false);
+    setSkuHighlightIndex(-1);
     if (!fromQuickRegister) {
       setQuickRegisteredSku(null);
     }
@@ -188,9 +257,55 @@ export function LedgerStockReflectDialog({
 
   const openQuickProductRegister = () => {
     setSkuSelectOpen(false);
+    setSkuHighlightIndex(-1);
     setCategoryForRegister("");
     setProductRegisterOpen(true);
   };
+
+  const activateSkuHighlight = (index: number) => {
+    if (index === 0) {
+      openQuickProductRegister();
+      return;
+    }
+    const product = filtered[index - 1];
+    if (product) {
+      selectProductSku(product.sku, product.name);
+    }
+  };
+
+  const handleSkuSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setSkuSelectOpen(true);
+      setSkuHighlightIndex((prev) => {
+        if (event.key === "ArrowDown") {
+          return prev < 0 ? 0 : Math.min(prev + 1, skuNavigableCount - 1);
+        }
+        return prev < 0 ? 0 : Math.max(prev - 1, 0);
+      });
+      return;
+    }
+
+    if (event.key === "Enter") {
+      if (skuHighlightIndex >= 0) {
+        event.preventDefault();
+        activateSkuHighlight(skuHighlightIndex);
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSkuSelectOpen(false);
+      setSkuHighlightIndex(-1);
+    }
+  };
+
+  const adjustQty = (delta: number) => {
+    setQty((prev) => Math.max(1, prev + delta));
+  };
+
+  const selectedProduct = products.find((p) => p.sku === selectedSku);
 
   const handleQuickProductSave = async (input: InventoryProductInput) => {
     const created = await createProduct.mutateAsync(input);
@@ -204,6 +319,84 @@ export function LedgerStockReflectDialog({
 
   const categoryMutating =
     categoryCreating || categoryUpdating || categoryDeleting;
+
+  const skuPickerDropdown =
+    skuSelectOpen && !productsLoading && skuDropdownRect
+      ? createPortal(
+          <div
+            ref={skuDropdownRef}
+            className="rounded-lg border border-[var(--color-border)] bg-white shadow-[0_10px_30px_rgba(2,6,23,0.16)]"
+            style={{
+              position: "fixed",
+              top: skuDropdownRect.top,
+              left: skuDropdownRect.left,
+              width: skuDropdownRect.width,
+              zIndex: SKU_PICKER_DROPDOWN_Z,
+            }}
+          >
+            <ul className="max-h-[min(50vh,420px)] divide-y divide-[var(--color-border)] overflow-y-auto overscroll-contain">
+              <li className="sticky top-0 z-10 border-b border-[var(--color-border)] bg-[var(--primary-50)]/80 backdrop-blur-sm">
+                <button
+                  ref={(el) => {
+                    skuListItemRefs.current[0] = el;
+                  }}
+                  type="button"
+                  onClick={openQuickProductRegister}
+                  className={cn(
+                    "flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-[var(--primary-700)] hover:bg-[var(--primary-50)]",
+                    skuHighlightIndex === 0 && "bg-[var(--primary-100)]",
+                  )}
+                >
+                  <Plus className="size-4 shrink-0" aria-hidden />
+                  + 상품 추가
+                </button>
+              </li>
+              {filtered.length === 0 ? (
+                <li className="px-3 py-8 text-center text-sm text-[var(--color-text-muted)]">
+                  {products.length === 0
+                    ? "등록된 상품이 없습니다. 위에서 추가해 주세요."
+                    : "검색 결과가 없습니다."}
+                </li>
+              ) : (
+                filtered.map((p, index) => (
+                  <li key={p.sku}>
+                    <button
+                      ref={(el) => {
+                        skuListItemRefs.current[index + 1] = el;
+                      }}
+                      type="button"
+                      onClick={() => selectProductSku(p.sku, p.name)}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--primary-50)]/50",
+                        selectedSku === p.sku && "bg-[var(--primary-50)]",
+                        skuHighlightIndex === index + 1 && "bg-[var(--primary-100)]",
+                      )}
+                    >
+                      <span className="min-w-0">
+                        <span className="font-mono text-xs text-[var(--color-text-muted)]">
+                          {p.sku}
+                        </span>
+                        <span className="ml-2 text-[var(--color-text-primary)]">
+                          {p.name}
+                        </span>
+                        {p.category ? (
+                          <span className="ml-2 text-xs text-[var(--color-text-secondary)]">
+                            [{p.category}]
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="shrink-0 tabular-nums text-[var(--color-text-secondary)]">
+                        {p.stock}개
+                      </span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>,
+          document.body,
+        )
+      : null;
 
   return (
     <>
@@ -225,9 +418,11 @@ export function LedgerStockReflectDialog({
                   value={search}
                   disabled={productsLoading}
                   onFocus={() => setSkuSelectOpen(true)}
+                  onKeyDown={handleSkuSearchKeyDown}
                   onChange={(e) => {
                     setSearch(e.target.value);
                     setSkuSelectOpen(true);
+                    setSkuHighlightIndex(-1);
                     if (selectedSku) {
                       setSelectedSku(null);
                       setQuickRegisteredSku(null);
@@ -239,60 +434,6 @@ export function LedgerStockReflectDialog({
                       : "SKU 또는 상품명으로 검색"
                   }
                 />
-
-                {skuSelectOpen && !productsLoading ? (
-                  <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-lg border border-[var(--color-border)] bg-white shadow-[0_10px_30px_rgba(2,6,23,0.16)]">
-                    <ul className="max-h-[220px] divide-y divide-[var(--color-border)] overflow-y-auto">
-                      <li className="sticky top-0 z-10 border-b border-[var(--color-border)] bg-[var(--primary-50)]/80 backdrop-blur-sm">
-                        <button
-                          type="button"
-                          onClick={openQuickProductRegister}
-                          className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-[var(--primary-700)] hover:bg-[var(--primary-50)]"
-                        >
-                          <Plus className="size-4 shrink-0" aria-hidden />
-                          + 상품 추가
-                        </button>
-                      </li>
-                      {filtered.length === 0 ? (
-                        <li className="px-3 py-8 text-center text-sm text-[var(--color-text-muted)]">
-                          {products.length === 0
-                            ? "등록된 상품이 없습니다. 위에서 추가해 주세요."
-                            : "검색 결과가 없습니다."}
-                        </li>
-                      ) : (
-                        filtered.map((p) => (
-                          <li key={p.sku}>
-                            <button
-                              type="button"
-                              onClick={() => selectProductSku(p.sku, p.name)}
-                              className={cn(
-                                "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--primary-50)]/50",
-                                selectedSku === p.sku && "bg-[var(--primary-50)]",
-                              )}
-                            >
-                              <span className="min-w-0">
-                                <span className="font-mono text-xs text-[var(--color-text-muted)]">
-                                  {p.sku}
-                                </span>
-                                <span className="ml-2 text-[var(--color-text-primary)]">
-                                  {p.name}
-                                </span>
-                                {p.category ? (
-                                  <span className="ml-2 text-xs text-[var(--color-text-secondary)]">
-                                    [{p.category}]
-                                  </span>
-                                ) : null}
-                              </span>
-                              <span className="shrink-0 tabular-nums text-[var(--color-text-secondary)]">
-                                {p.stock}개
-                              </span>
-                            </button>
-                          </li>
-                        ))
-                      )}
-                    </ul>
-                  </div>
-                ) : null}
               </div>
             </div>
 
@@ -422,6 +563,8 @@ export function LedgerStockReflectDialog({
         }}
         onDelete={deleteCategory}
       />
+
+      {skuPickerDropdown}
     </>
   );
 }

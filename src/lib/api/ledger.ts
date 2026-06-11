@@ -1,7 +1,10 @@
 import { ApiError, apiFetch, type ApiEnvelope } from "@/lib/api-client";
+import { resolveLedgerMinYear } from "@/lib/ledger-period";
 import type { PeriodPreset } from "@/types/common";
 
 export type LedgerEarliestMonthTab = "purchase" | "sale" | "income";
+
+export const LEDGER_MIN_YEAR_QUERY_KEY = ["ledger", "earliest-year"] as const;
 
 export type LedgerEarliestMonth = {
   year: number;
@@ -94,15 +97,26 @@ export async function fetchLedgerSummary(
   return normalizeLedgerSummary(res.data ?? {});
 }
 
-/** GET /api/v1/ledger/earliest-month */
+/** GET /api/v1/ledger/earliest-year */
+export async function fetchLedgerEarliestYear(): Promise<number> {
+  const res = await apiFetch<ApiEnvelope<{ year: number | null }>>(
+    "/ledger/earliest-year",
+  );
+  return resolveLedgerMinYear(res.data?.year ?? null);
+}
+
+/**
+ * GET /api/v1/ledger/earliest-month
+ * @param year 생략 시 전체 기간 최초 월
+ */
 export async function fetchLedgerEarliestMonth(
-  year: number,
   tab: LedgerEarliestMonthTab,
+  year?: number,
 ): Promise<LedgerEarliestMonth> {
-  const search = new URLSearchParams({
-    year: String(year),
-    tab,
-  });
+  const search = new URLSearchParams({ tab });
+  if (year != null) {
+    search.set("year", String(year));
+  }
   const res = await apiFetch<ApiEnvelope<LedgerEarliestMonth>>(
     `/ledger/earliest-month?${search}`,
   );

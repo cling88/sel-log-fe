@@ -91,12 +91,8 @@ export function ProductImageField({
         </button>
       )}
 
-      {error ? (
+      {error && (
         <p className="text-xs text-[var(--color-danger)]">{error}</p>
-      ) : (
-        <p className="text-xs text-[var(--color-text-secondary)]">
-          클릭하여 업로드 · Ctrl+V 붙여넣기 · 드래그·줌으로 영역 조정
-        </p>
       )}
     </div>
   );

@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  readLedgerSummaryPeriod,
+  readLedgerTrendExpanded,
+  writeLedgerSummaryPeriod,
+  writeLedgerTrendExpanded,
+} from "@/lib/ledger-header-preferences-storage";
 import { usePathname, useSearchParams } from "next/navigation";
 import { LedgerExcelDownloadActions } from "@/components/ledger/ledger-excel-download-actions";
 import { LedgerYearPicker } from "@/components/ledger/ledger-year-picker";
@@ -61,6 +67,11 @@ export function LedgerHeader() {
   const [trendExpanded, setTrendExpanded] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodPreset>("today");
 
+  useEffect(() => {
+    setTrendExpanded(readLedgerTrendExpanded());
+    setSelectedPeriod(readLedgerSummaryPeriod());
+  }, []);
+
   const {
     data: summary,
     isLoading: summaryLoading,
@@ -91,7 +102,10 @@ export function LedgerHeader() {
         <section className="relative bg-[var(--primary-800)] px-4 py-4 pr-12 text-[var(--color-text-inverse)] sm:px-6 sm:pr-14">
           <button
             type="button"
-            onClick={() => setTrendExpanded(false)}
+            onClick={() => {
+              setTrendExpanded(false);
+              writeLedgerTrendExpanded(false);
+            }}
             className="absolute top-3 right-3 flex size-8 items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/10 hover:text-white sm:top-4 sm:right-4"
             aria-label="정산 추이 접기"
             aria-expanded
@@ -105,7 +119,10 @@ export function LedgerHeader() {
                 <button
                   key={preset.id}
                   type="button"
-                  onClick={() => setSelectedPeriod(preset.id)}
+                  onClick={() => {
+                    setSelectedPeriod(preset.id);
+                    writeLedgerSummaryPeriod(preset.id);
+                  }}
                   className={cn(
                     "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
                     active
@@ -196,7 +213,10 @@ export function LedgerHeader() {
           <span className="text-sm font-semibold text-white">정산 추이</span>
           <button
             type="button"
-            onClick={() => setTrendExpanded(true)}
+            onClick={() => {
+              setTrendExpanded(true);
+              writeLedgerTrendExpanded(true);
+            }}
             className="flex size-8 items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/10 hover:text-white"
             aria-label="정산 추이 펼치기"
             aria-expanded={false}
