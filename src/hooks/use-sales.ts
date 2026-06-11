@@ -8,7 +8,8 @@ import {
 import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { invalidateLedgerEarliestMonth } from "@/hooks/use-ledger-earliest-month";
 import { invalidateLedgerSummary } from "@/hooks/use-ledger-summary";
-import { useLedgerMonthParam } from "@/hooks/use-ledger-month";
+import { useLedgerMonthScope } from "@/hooks/use-ledger-month";
+import { toLedgerListApiScope } from "@/lib/ledger-period";
 import { PRODUCTS_QUERY_KEY } from "@/hooks/use-products";
 import {
   createSaleOrder,
@@ -35,15 +36,15 @@ export function saleListQueryKey(month: string, q: string, page: number) {
 }
 
 export function useSaleOrderList(committedSearch: string, page: number) {
-  const month = useLedgerMonthParam();
+  const scope = useLedgerMonthScope();
   const q = committedSearch.trim();
   const safePage = Math.max(1, page);
 
   return useQuery({
-    queryKey: saleListQueryKey(month, q, safePage),
+    queryKey: saleListQueryKey(scope.scopeKey, q, safePage),
     queryFn: () =>
       fetchSaleOrders({
-        month,
+        ...toLedgerListApiScope(scope),
         ...(q ? { q } : {}),
         page: safePage,
         limit: SALES_API_PAGE_SIZE,

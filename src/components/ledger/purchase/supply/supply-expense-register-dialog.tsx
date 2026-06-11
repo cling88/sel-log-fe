@@ -32,7 +32,10 @@ interface SupplyExpenseRegisterDialogProps {
   onOpenChange: (open: boolean) => void;
   defaultPaymentDate?: string;
   editLine?: SupplyExpenseLine | null;
-  onSave: (line: Omit<SupplyExpenseLine, "id" | "stockReflected">) => void;
+  onSave: (
+    line: Omit<SupplyExpenseLine, "id" | "stockReflected">,
+    options?: { closeAfter?: boolean },
+  ) => void | Promise<void>;
   onUpdate?: (
     lineId: string,
     line: Omit<SupplyExpenseLine, "id" | "stockReflected">,
@@ -127,6 +130,7 @@ export function SupplyExpenseRegisterDialog({
     createEmptySupplyExpenseInput(resolvePaymentDate(defaultPaymentDate)),
   );
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const formSessionRef = useRef<string | null>(null);
 
   const resetForm = (paymentDate?: string) => {
@@ -179,20 +183,23 @@ export function SupplyExpenseRegisterDialog({
       setError("결제날짜, 항목명, 수량, 금액을 확인해 주세요.");
       return;
     }
-    if (isEdit && editLine && onUpdate) {
-      onUpdate(editLine.id, parsed);
-      await alert("수정되었습니다.");
-      onOpenChange(false);
-      return;
+
+    setSubmitting(true);
+    try {
+      if (isEdit && editLine && onUpdate) {
+        await Promise.resolve(onUpdate(editLine.id, parsed));
+        await alert("수정되었습니다.");
+        onOpenChange(false);
+        return;
+      }
+      await Promise.resolve(onSave(parsed, { closeAfter }));
+      if (!closeAfter) {
+        formSessionRef.current = `new:${parsed.paymentDate}`;
+        resetForm(parsed.paymentDate);
+      }
+    } finally {
+      setSubmitting(false);
     }
-    onSave(parsed);
-    await alert("등록되었습니다.");
-    if (closeAfter) {
-      onOpenChange(false);
-      return;
-    }
-    formSessionRef.current = `new:${parsed.paymentDate}`;
-    resetForm(parsed.paymentDate);
   };
 
   const displayDate = form.paymentDate || todayIso();
@@ -319,24 +326,25 @@ export function SupplyExpenseRegisterDialog({
             </Button>
           ) : null}
           <div className="flex flex-wrap justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => onOpenChange(false)}>
               취소
             </Button>
             {isEdit ? (
-              <Button type="button" onClick={() => void submit(true)}>
-                저장
+              <Button type="button" disabled={submitting} onClick={() => void submit(true)}>
+                {submitting ? "저장 중…" : "저장"}
               </Button>
             ) : (
               <>
                 <Button
                   type="button"
                   variant="secondary"
+                  disabled={submitting}
                   onClick={() => void submit(false)}
                 >
-                  저장 후 계속 추가
+                  {submitting ? "저장 중…" : "저장 후 계속 추가"}
                 </Button>
-                <Button type="button" onClick={() => void submit(true)}>
-                  저장하고 닫기
+                <Button type="button" disabled={submitting} onClick={() => void submit(true)}>
+                  {submitting ? "저장 중…" : "저장하고 닫기"}
                 </Button>
               </>
             )}

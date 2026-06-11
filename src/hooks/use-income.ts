@@ -8,7 +8,8 @@ import {
 import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { invalidateLedgerEarliestMonth } from "@/hooks/use-ledger-earliest-month";
 import { invalidateLedgerSummary } from "@/hooks/use-ledger-summary";
-import { useLedgerMonthParam } from "@/hooks/use-ledger-month";
+import { useLedgerMonthScope } from "@/hooks/use-ledger-month";
+import { toLedgerListApiScope } from "@/lib/ledger-period";
 import {
   createIncomeLine,
   deleteIncomeLine,
@@ -33,15 +34,15 @@ export function incomeListQueryKey(month: string, q: string, page: number) {
 }
 
 export function useIncomeList(committedSearch: string, page: number) {
-  const month = useLedgerMonthParam();
+  const scope = useLedgerMonthScope();
   const q = committedSearch.trim();
   const safePage = Math.max(1, page);
 
   return useQuery({
-    queryKey: incomeListQueryKey(month, q, safePage),
+    queryKey: incomeListQueryKey(scope.scopeKey, q, safePage),
     queryFn: () =>
       fetchIncomeList({
-        month,
+        ...toLedgerListApiScope(scope),
         ...(q ? { q } : {}),
         page: safePage,
         limit: INCOME_API_GROUPS_PAGE_SIZE,

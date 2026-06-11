@@ -1,5 +1,11 @@
 import type { PurchaseLineBankFields } from "@/types/bank-account";
 import type { PurchaseLineVendorFields } from "@/types/vendor";
+import type {
+  PurchaseDateGroupTotals,
+  PurchaseGroupAdjustment,
+  PurchaseGroupMeta,
+} from "@/types/purchase-group";
+import type { VendorSummary } from "@/types/vendor";
 
 export interface SupplyExpenseLine
   extends PurchaseLineBankFields,
@@ -37,3 +43,27 @@ export function createEmptySupplyExpenseInput(
     vendorId: "",
   };
 }
+
+export type SupplyVendorGroup = {
+  vendorId: string | null;
+  vendorSnapshot: VendorSummary | null;
+  extraFees: PurchaseGroupAdjustment[];
+  discounts: PurchaseGroupAdjustment[];
+  orderCancelled: boolean;
+  subtotal: number;
+  lines: SupplyExpenseLine[];
+};
+
+export const SUPPLY_VENDOR_NONE_KEY = "__none__";
+
+export function supplyVendorGroupKey(vendorId: string | null): string {
+  return vendorId ?? SUPPLY_VENDOR_NONE_KEY;
+}
+
+export type SupplyDateGroup = {
+  paymentDate: string;
+  groupName: string | null;
+  orderCancelled: boolean;
+  vendorGroups: SupplyVendorGroup[];
+  totals: PurchaseDateGroupTotals;
+};

@@ -22,11 +22,16 @@ import { formatPurchaseLineVendorLabel } from "@/lib/purchase-vendor-display";
 import type { SupplyExpenseLine } from "@/types/purchase-supply";
 import { cn } from "@/lib/utils";
 
-const DESKTOP_GRID_CLASS =
+const DESKTOP_GRID_WITH_VENDOR =
   "grid w-full min-w-[1000px] items-center grid-cols-[minmax(56px,72px)_minmax(160px,1.6fr)_minmax(100px,1fr)_minmax(56px,64px)_minmax(96px,104px)_minmax(128px,auto)_minmax(120px,1fr)_minmax(88px,1fr)]";
+
+const DESKTOP_GRID_NO_VENDOR =
+  "grid w-full min-w-[880px] items-center grid-cols-[minmax(56px,72px)_minmax(180px,1.8fr)_minmax(56px,64px)_minmax(96px,104px)_minmax(128px,auto)_minmax(120px,1fr)_minmax(88px,1fr)]";
 
 interface SupplyExpenseLineListProps {
   lines: SupplyExpenseLine[];
+  hideVendorColumn?: boolean;
+  stockActionsDisabled?: boolean;
   onReflectStock: (lineId: string) => void;
   onCancelStockReflect: (lineId: string) => void;
   onLineClick: (lineId: string) => void;
@@ -34,11 +39,13 @@ interface SupplyExpenseLineListProps {
 
 function StockActions({
   line,
+  busy,
   onReflectStock,
   onCancelStockReflect,
   compact,
 }: {
   line: SupplyExpenseLine;
+  busy?: boolean;
   onReflectStock: (lineId: string) => void;
   onCancelStockReflect: (lineId: string) => void;
   compact?: boolean;
@@ -51,10 +58,11 @@ function StockActions({
           type="button"
           variant="ghost"
           size="sm"
+          disabled={busy}
           className="h-7 px-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
           onClick={() => onCancelStockReflect(line.id)}
         >
-          반영취소
+          {busy ? "처리 중…" : "반영취소"}
         </Button>
       </div>
     );
@@ -64,26 +72,32 @@ function StockActions({
     <Button
       type="button"
       size="sm"
+      disabled={busy}
       className={cn(purchasePrimaryActionClass, compact && "w-full")}
       onClick={() => onReflectStock(line.id)}
     >
-      재고반영
+      {busy ? "처리 중…" : "재고반영"}
     </Button>
   );
 }
 
-function DesktopHeader() {
+function DesktopHeader({ hideVendorColumn }: { hideVendorColumn?: boolean }) {
+  const gridClass = hideVendorColumn
+    ? DESKTOP_GRID_NO_VENDOR
+    : DESKTOP_GRID_WITH_VENDOR;
   return (
-    <div className={DESKTOP_GRID_CLASS} role="row">
+    <div className={gridClass} role="row">
       <div className={cn(purchaseTableHeaderCellClass, "justify-center")} role="columnheader">
         번호
       </div>
       <div className={purchaseTableHeaderCellClass} role="columnheader">
         항목명
       </div>
-      <div className={purchaseTableHeaderCellClass} role="columnheader">
-        구매처
-      </div>
+      {!hideVendorColumn ? (
+        <div className={purchaseTableHeaderCellClass} role="columnheader">
+          구매처
+        </div>
+      ) : null}
       <div className={cn(purchaseTableHeaderCellClass, "justify-end")} role="columnheader">
         수량
       </div>
@@ -106,23 +120,30 @@ function DesktopHeader() {
 function DesktopRow({
   line,
   index,
+  hideVendorColumn,
+  stockActionsDisabled,
   onReflectStock,
   onCancelStockReflect,
   onLineClick,
 }: {
   line: SupplyExpenseLine;
   index: number;
+  hideVendorColumn?: boolean;
+  stockActionsDisabled?: boolean;
   onReflectStock: (lineId: string) => void;
   onCancelStockReflect: (lineId: string) => void;
   onLineClick: (lineId: string) => void;
 }) {
   const pending = !line.stockReflected;
+  const gridClass = hideVendorColumn
+    ? DESKTOP_GRID_NO_VENDOR
+    : DESKTOP_GRID_WITH_VENDOR;
 
   return (
     <div
       role="row"
       className={cn(
-        DESKTOP_GRID_CLASS,
+        gridClass,
         purchaseTableRowClass(pending),
         lineRowClickableClass(false),
       )}
@@ -139,14 +160,16 @@ function DesktopRow({
       <div className={cn(purchaseTableBodyCellClass, "font-medium text-[var(--color-text-primary)]")}>
         {line.itemName}
       </div>
-      <div className={cn(purchaseTableBodyCellClass, "text-[var(--color-text-secondary)]")}>
-        <PurchaseVendorLabel
-          vendorId={line.vendorId}
-          vendorSnapshot={line.vendorSnapshot}
-          vendor={line.vendor}
-          className="block min-w-0 truncate"
-        />
-      </div>
+      {!hideVendorColumn ? (
+        <div className={cn(purchaseTableBodyCellClass, "text-[var(--color-text-secondary)]")}>
+          <PurchaseVendorLabel
+            vendorId={line.vendorId}
+            vendorSnapshot={line.vendorSnapshot}
+            vendor={line.vendor}
+            className="block min-w-0 truncate"
+          />
+        </div>
+      ) : null}
       <div className={cn(purchaseTableBodyCellClass, "justify-end tabular-nums")}>
         {line.quantity}
       </div>
@@ -160,6 +183,7 @@ function DesktopRow({
       >
         <StockActions
           line={line}
+          busy={stockActionsDisabled}
           onReflectStock={onReflectStock}
           onCancelStockReflect={onCancelStockReflect}
         />
@@ -177,12 +201,16 @@ function DesktopRow({
 function MobileCard({
   line,
   index,
+  hideVendorColumn,
+  stockActionsDisabled,
   onReflectStock,
   onCancelStockReflect,
   onLineClick,
 }: {
   line: SupplyExpenseLine;
   index: number;
+  hideVendorColumn?: boolean;
+  stockActionsDisabled?: boolean;
   onReflectStock: (lineId: string) => void;
   onCancelStockReflect: (lineId: string) => void;
   onLineClick: (lineId: string) => void;
@@ -190,10 +218,14 @@ function MobileCard({
   const fields: { label: string; value: ReactNode }[] = [
     { label: "번호", value: index + 1 },
     { label: "항목명", value: line.itemName },
-  {
-      label: "구매처",
-      value: formatPurchaseLineVendorLabel(line),
-    },
+    ...(hideVendorColumn
+      ? []
+      : [
+          {
+            label: "구매처",
+            value: formatPurchaseLineVendorLabel(line),
+          },
+        ]),
     { label: "수량", value: `${line.quantity}개` },
     { label: "금액", value: `${formatAmount(line.paymentAmount)}원` },
     { label: "출금계좌", value: formatPurchaseLineBankLabel(line) },
@@ -230,6 +262,7 @@ function MobileCard({
           <dd>
             <StockActions
               line={line}
+              busy={stockActionsDisabled}
               onReflectStock={onReflectStock}
               onCancelStockReflect={onCancelStockReflect}
               compact
@@ -243,6 +276,8 @@ function MobileCard({
 
 export function SupplyExpenseLineList({
   lines,
+  hideVendorColumn,
+  stockActionsDisabled,
   onReflectStock,
   onCancelStockReflect,
   onLineClick,
@@ -251,13 +286,15 @@ export function SupplyExpenseLineList({
     <>
       <div className={cn("hidden md:block", purchaseTableScrollClass)}>
         <div className={purchaseTableShellClass}>
-          <DesktopHeader />
+          <DesktopHeader hideVendorColumn={hideVendorColumn} />
           <div className="divide-y divide-[var(--color-border)]/80">
             {lines.map((line, index) => (
               <DesktopRow
                 key={line.id}
                 line={line}
                 index={index}
+                hideVendorColumn={hideVendorColumn}
+                stockActionsDisabled={stockActionsDisabled}
                 onReflectStock={onReflectStock}
                 onCancelStockReflect={onCancelStockReflect}
                 onLineClick={onLineClick}
@@ -273,6 +310,8 @@ export function SupplyExpenseLineList({
             <MobileCard
               line={line}
               index={index}
+              hideVendorColumn={hideVendorColumn}
+              stockActionsDisabled={stockActionsDisabled}
               onReflectStock={onReflectStock}
               onCancelStockReflect={onCancelStockReflect}
               onLineClick={onLineClick}

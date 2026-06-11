@@ -5,6 +5,7 @@ import type {
   MonthlyReview,
   SaleIncomeReconciliation,
 } from "@/types/dashboard";
+import type { LedgerCumulativeExpense } from "@/lib/api/ledger";
 
 export function getDashboardErrorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -28,6 +29,19 @@ function nullableString(value: unknown): string | null {
   return String(value);
 }
 
+function normalizeCumulativeExpense(
+  raw: unknown,
+): LedgerCumulativeExpense | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const row = raw as Record<string, unknown>;
+  return {
+    productTotal: num(row.productTotal),
+    supplyTotal: num(row.supplyTotal),
+    otherTotal: num(row.otherTotal),
+    total: num(row.total),
+  };
+}
+
 export function normalizeDashboardOverview(raw: unknown): DashboardOverview {
   const row = (raw ?? {}) as Record<string, unknown>;
   const purchase = (row.purchase ?? {}) as Record<string, unknown>;
@@ -36,6 +50,9 @@ export function normalizeDashboardOverview(raw: unknown): DashboardOverview {
   const alerts = (row.alerts ?? {}) as Record<string, unknown>;
   const today = (row.today ?? {}) as Record<string, unknown>;
   const cumulative = (row.cumulative ?? {}) as Record<string, unknown>;
+  const cumulativeExpense = normalizeCumulativeExpense(
+    cumulative.cumulativeExpense,
+  );
 
   return {
     month: String(row.month ?? ""),
@@ -74,6 +91,7 @@ export function normalizeDashboardOverview(raw: unknown): DashboardOverview {
     cumulative: {
       otherExpenseTotal: num(cumulative.otherExpenseTotal),
       netTotal: num(cumulative.netTotal),
+      ...(cumulativeExpense ? { cumulativeExpense } : {}),
     },
   };
 }

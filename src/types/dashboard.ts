@@ -1,3 +1,5 @@
+import type { LedgerCumulativeExpense } from "@/lib/api/ledger";
+
 export type DashboardOverview = {
   month: string;
   compareMonth: string | null;
@@ -33,8 +35,11 @@ export type DashboardOverview = {
     stockDelta: number;
   };
   cumulative: {
+    /** 레거시 — 기타지출만 누적 */
     otherExpenseTotal: number;
     netTotal: number;
+    /** 전체 기간 상품+부가+기타 누적 (BE 권장) */
+    cumulativeExpense?: LedgerCumulativeExpense;
   };
 };
 

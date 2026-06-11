@@ -11,10 +11,13 @@ import {
 import { fetchLedgerEarliestMonth } from "@/lib/api/ledger";
 import {
   getTodayYearMonth,
+  isLedgerMonthAllParam,
   isMonthScopedLedgerTab,
   listYearOptions,
+  parseLedgerMonthFilter,
   parseYearMonth,
   toEarliestMonthTab,
+  toLedgerMonthAllParam,
   toYearMonthParam,
 } from "@/lib/ledger-period";
 import type { LedgerTabId } from "@/types/common";
@@ -45,8 +48,8 @@ export function LedgerYearPicker({ interactive = true }: LedgerYearPickerProps) 
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const monthParam = searchParams.get("month");
-  const parsed = parseYearMonth(monthParam);
-  const initial = parsed ?? getTodayYearMonth();
+  const scope = parseLedgerMonthFilter(monthParam);
+  const initial = scope;
   const activeTab = readActiveTab(searchParams);
 
   const [year, setYear] = useState(initial.year);
@@ -65,20 +68,24 @@ export function LedgerYearPicker({ interactive = true }: LedgerYearPickerProps) 
     let nextMonthParam = "";
 
     if (isMonthScopedLedgerTab(activeTab) && apiTab) {
-      const data = await queryClient.fetchQuery({
-        queryKey: ledgerEarliestMonthQueryKey(clampedYear, apiTab),
-        queryFn: () => fetchLedgerEarliestMonth(clampedYear, apiTab),
-      });
-      const earliest = data.month ? parseYearMonth(data.month) : null;
-      const nextMonth =
-        earliest && earliest.year === clampedYear
-          ? earliest.month
-          : clampedYear === currentYear
-            ? currentMonth
-            : 1;
-      nextMonthParam = toYearMonthParam(clampedYear, nextMonth);
+      if (isLedgerMonthAllParam(monthParam)) {
+        nextMonthParam = toLedgerMonthAllParam(clampedYear);
+      } else {
+        const data = await queryClient.fetchQuery({
+          queryKey: ledgerEarliestMonthQueryKey(clampedYear, apiTab),
+          queryFn: () => fetchLedgerEarliestMonth(clampedYear, apiTab),
+        });
+        const earliest = data.month ? parseYearMonth(data.month) : null;
+        const nextMonth =
+          earliest && earliest.year === clampedYear
+            ? earliest.month
+            : clampedYear === currentYear
+              ? currentMonth
+              : 1;
+        nextMonthParam = toYearMonthParam(clampedYear, nextMonth);
+      }
     } else {
-      let nextMonth = parsed?.month ?? currentMonth;
+      let nextMonth = scope.month ?? currentMonth;
       if (clampedYear === currentYear && nextMonth > currentMonth) {
         nextMonth = currentMonth;
       }
@@ -91,9 +98,7 @@ export function LedgerYearPicker({ interactive = true }: LedgerYearPickerProps) 
   };
 
   useEffect(() => {
-    const next = parseYearMonth(monthParam);
-    if (!next) return;
-    setYear(next.year);
+    setYear(parseLedgerMonthFilter(monthParam).year);
   }, [monthParam]);
 
   return (

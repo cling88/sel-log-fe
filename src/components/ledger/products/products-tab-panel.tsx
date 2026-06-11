@@ -63,6 +63,12 @@ import type {
 import type { InventoryCategory } from "@/types/inventory-category";
 import type { ProductStockStatus } from "@/types/dashboard";
 
+function stockFilterEmptyMessage(status: ProductStockStatus): string {
+  if (status === "out_of_stock") return "품절 상품이 없습니다.";
+  if (status === "low_stock") return "품절임박 상품이 없습니다.";
+  return "재고 있는 상품이 없습니다.";
+}
+
 function productStatusLabel(p: InventoryProduct) {
   if (!p.active) return "비활성";
   if (p.stock <= 0) return "품절";
@@ -356,9 +362,10 @@ export function ProductsTabPanel() {
   const productsMeta = productsListData?.meta;
   const listTotal = productsMeta?.total ?? 0;
 
-  /** 등록 상품 0개(검색어 없이 목록 조회) — 등록 유도 화면만 */
+  /** 등록 상품 0개(검색·재고 필터 없이 목록 조회) — 등록 유도 화면만 */
   const showCatalogEmpty =
     !hasCommittedSearch &&
+    stockStatus == null &&
     !productsLoading &&
     !productsLoadError &&
     listTotal === 0;
@@ -569,7 +576,9 @@ export function ProductsTabPanel() {
         <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
           {hasCommittedSearch
             ? "검색 결과가 없습니다."
-            : "표시할 상품이 없습니다."}
+            : stockStatus
+              ? stockFilterEmptyMessage(stockStatus)
+              : "표시할 상품이 없습니다."}
         </p>
       );
     }

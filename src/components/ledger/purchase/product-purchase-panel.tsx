@@ -6,6 +6,7 @@ import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { useLedgerUrlSearch } from "@/hooks/use-ledger-url-search";
 import {
   getPurchaseErrorMessage,
+  linePayloadForBankUpdateFromProductPurchase,
   linePayloadFromProductPurchase,
   useCancelProductPurchaseStockReflect,
   useCreateProductPurchaseLine,
@@ -73,6 +74,15 @@ export function ProductPurchasePanel() {
   const patchGroupCancel = usePatchPurchaseGroupCancel();
   const patchVendorGroup = usePatchPurchaseVendorGroup();
   const patchVendorGroupCancel = usePatchPurchaseVendorGroupCancel();
+
+  const stockActionsDisabled =
+    reflectStock.isPending || cancelReflect.isPending;
+  const groupActionsDisabled =
+    stockActionsDisabled ||
+    patchGroup.isPending ||
+    patchGroupCancel.isPending ||
+    patchVendorGroup.isPending ||
+    patchVendorGroupCancel.isPending;
 
   const groups = listData?.groups ?? [];
   const lines = listData?.lines ?? [];
@@ -157,7 +167,7 @@ export function ProductPurchasePanel() {
     const line = lines.find((l) => l.id === lineId);
     if (line?.stockReflected) {
       await alert(
-        "재고 반영된 내역은 수정할 수 없습니다. 수정하려면 반영을 취소해 주세요.",
+        "재고 반영된 내역은 수정할 수 없습니다. 출금계좌만 변경할 수 있습니다.",
       );
       return;
     }
@@ -168,6 +178,31 @@ export function ProductPurchasePanel() {
     setEditLineId(null);
     setDialogOpen(false);
     await alert("저장되었습니다.");
+  };
+
+  const handleUpdateBankOnly = async (lineId: string, bankId: string | null) => {
+    const line = lines.find((l) => l.id === lineId);
+    if (!line) return;
+
+    await updateLine.mutateAsync({
+      id: lineId,
+      body: linePayloadForBankUpdateFromProductPurchase({
+        paymentDate: line.paymentDate,
+        orderNo: line.orderNo,
+        imageUrl: line.imageUrl,
+        productName: line.productName,
+        productLink: line.productLink,
+        vendor: line.vendor,
+        vendorId: line.vendorId ?? "",
+        vendorSnapshot: line.vendorSnapshot,
+        quantity: line.quantity,
+        paymentAmount: line.paymentAmount,
+        memo: line.memo,
+        bankId,
+        bank: line.bank,
+      }),
+    });
+    await alert("출금계좌가 저장되었습니다.");
   };
 
   const handleDeleteLine = async (lineId: string) => {
@@ -253,7 +288,11 @@ export function ProductPurchasePanel() {
   const finishStockReflect = async (lineId: string, info: StockReflectInfo) => {
     await reflectStock.mutateAsync({
       id: lineId,
-      body: { productSku: info.sku, qty: info.qty },
+      body: {
+        productSku: info.sku,
+        qty: info.qty,
+        ...(info.preserveProductPrice ? { preserveProductPrice: true } : {}),
+      },
     });
 
     let remaining: string[] = [];
@@ -452,6 +491,8 @@ export function ProductPurchasePanel() {
                   onToggleVendorOrderCancel={(date, vendorId) =>
                     void handleToggleVendorOrderCancel(date, vendorId)
                   }
+                  groupActionsDisabled={groupActionsDisabled}
+                  stockActionsDisabled={stockActionsDisabled}
                 />
               </div>
               <div className="border-t border-[var(--color-border)]/40 px-0 py-1.5">
@@ -476,6 +517,7 @@ export function ProductPurchasePanel() {
         editLine={editLine}
         onSave={handleSave}
         onUpdate={handleUpdate}
+        onUpdateBankOnly={handleUpdateBankOnly}
         onDelete={
           editLine ? () => handleDeleteLine(editLine.id) : undefined
         }
@@ -499,13 +541,12 @@ export function ProductPurchasePanel() {
       <LedgerStockReflectDialog
         open={stockReflectLineId != null}
         onOpenChange={(open) => {
-          if (!open) {
-            setStockReflectLineId(null);
-            setBulkQueue([]);
-          }
+          if (open) return;
+          setStockReflectLineId(null);
+          setBulkQueue([]);
         }}
         target={stockReflectTarget}
-        onConfirm={(id, info) => void finishStockReflect(id, info)}
+        onConfirm={(id, info) => finishStockReflect(id, info)}
       />
     </>
   );

@@ -1,9 +1,11 @@
 import {
   calcFinalUnitPrice,
+  calcRecommendedPrice,
   calcUnitPrice,
   formatRecommendedPriceRange,
   type MarginRateRange,
 } from "@/lib/purchase-product-calc";
+import { DEFAULT_USER_SETTINGS } from "@/types/settings";
 import type { InventoryProductInput } from "@/types/inventory-product";
 
 export type StockReflectPricingContext = {
@@ -46,17 +48,45 @@ function buildMemo(ctx: StockReflectLineContext): string {
   return parts.join("\n");
 }
 
-/** 재고반영 모달 → 상품 등록 prefill (초기 재고는 항상 0) */
-export function buildProductPrefillFromPurchaseLine(
-  ctx: StockReflectLineContext,
-): Partial<InventoryProductInput> {
-  const name = (ctx.productName ?? ctx.itemName ?? "").trim();
+function resolvePurchaseUnitPrice(ctx: StockReflectLineContext): number {
   const quantity = Math.max(1, Math.trunc(ctx.quantity));
   const paymentAmount =
     typeof ctx.paymentAmount === "number" ? Math.trunc(ctx.paymentAmount) : 0;
-  const unitPrice =
-    paymentAmount > 0 ? calcUnitPrice(quantity, paymentAmount) : 0;
+  if (paymentAmount <= 0) return 0;
+
+  const unitPrice = calcUnitPrice(quantity, paymentAmount);
+  if (!ctx.pricing) return unitPrice;
+
+  return calcFinalUnitPrice(
+    { quantity, paymentAmount },
+    ctx.pricing.totalOrder,
+    ctx.pricing.totalExpense,
+  );
+}
+
+/** 재고반영 신규 등록 prefill용 — 매입 단가가 아닌 추천 판매가(마진 하한 기준) */
+export function calcDefaultSellingPriceFromPurchaseLine(
+  ctx: StockReflectLineContext,
+  margins: MarginRateRange = {
+    min: DEFAULT_USER_SETTINGS.marginMinRate,
+    max: DEFAULT_USER_SETTINGS.marginMaxRate,
+  },
+): number {
+  const purchaseUnit = resolvePurchaseUnitPrice(ctx);
+  if (purchaseUnit <= 0) return 0;
+
+  const recommended = calcRecommendedPrice(purchaseUnit, margins.min);
+  return recommended > 0 ? recommended : purchaseUnit;
+}
+
+/** 재고반영 모달 → 상품 등록 prefill (초기 재고는 항상 0) */
+export function buildProductPrefillFromPurchaseLine(
+  ctx: StockReflectLineContext,
+  margins?: MarginRateRange,
+): Partial<InventoryProductInput> {
+  const name = (ctx.productName ?? ctx.itemName ?? "").trim();
   const imageUrl = ctx.imageUrl?.trim() ?? "";
+  const currentPrice = calcDefaultSellingPriceFromPurchaseLine(ctx, margins);
 
   return {
     sku: "",
@@ -67,7 +97,7 @@ export function buildProductPrefillFromPurchaseLine(
     active: true,
     stock: 0,
     safetyStock: 0,
-    currentPrice: unitPrice ?? 0,
+    currentPrice,
   };
 }
 

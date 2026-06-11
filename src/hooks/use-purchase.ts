@@ -23,11 +23,13 @@ import {
   patchPurchaseGroupCancel,
   patchPurchaseVendorGroup,
   patchPurchaseVendorGroupCancel,
+  patchSupplyVendorGroup,
   PURCHASE_API_GROUPS_PAGE_SIZE,
   reflectProductPurchaseStock,
   reflectSupplyStock,
   toOtherLinePayload,
   toProductPurchaseLinePayload,
+  toProductPurchaseLinePayloadForBankUpdate,
   toSupplyLinePayload,
   updateOtherExpenseLine,
   updateProductPurchaseLine,
@@ -40,7 +42,8 @@ import {
 import { PRODUCTS_QUERY_KEY } from "@/hooks/use-products";
 import { invalidateLedgerEarliestMonth } from "@/hooks/use-ledger-earliest-month";
 import { invalidateLedgerSummary } from "@/hooks/use-ledger-summary";
-import { useLedgerMonthParam } from "@/hooks/use-ledger-month";
+import { useLedgerMonthScope } from "@/hooks/use-ledger-month";
+import { toLedgerListApiScope } from "@/lib/ledger-period";
 import type { OtherExpenseLine } from "@/types/purchase-other";
 import type { ProductPurchaseLine } from "@/types/purchase-product";
 import type { SupplyExpenseLine } from "@/types/purchase-supply";
@@ -73,15 +76,15 @@ export function useProductPurchaseList(
   committedSearch: string,
   page: number,
 ) {
-  const month = useLedgerMonthParam();
+  const scope = useLedgerMonthScope();
   const q = committedSearch.trim();
   const safePage = Math.max(1, page);
 
   return useQuery({
-    queryKey: productPurchaseListQueryKey(month, q, safePage),
+    queryKey: productPurchaseListQueryKey(scope.scopeKey, q, safePage),
     queryFn: () =>
       fetchProductPurchaseList({
-        month,
+        ...toLedgerListApiScope(scope),
         ...(q ? { q } : {}),
         page: safePage,
         limit: PURCHASE_API_GROUPS_PAGE_SIZE,
@@ -90,15 +93,15 @@ export function useProductPurchaseList(
 }
 
 export function useSupplyExpenseList(committedSearch: string, page: number) {
-  const month = useLedgerMonthParam();
+  const scope = useLedgerMonthScope();
   const q = committedSearch.trim();
   const safePage = Math.max(1, page);
 
   return useQuery({
-    queryKey: supplyListQueryKey(month, q, safePage),
+    queryKey: supplyListQueryKey(scope.scopeKey, q, safePage),
     queryFn: () =>
       fetchSupplyExpenseList({
-        month,
+        ...toLedgerListApiScope(scope),
         ...(q ? { q } : {}),
         page: safePage,
         limit: PURCHASE_API_GROUPS_PAGE_SIZE,
@@ -107,15 +110,15 @@ export function useSupplyExpenseList(committedSearch: string, page: number) {
 }
 
 export function useOtherExpenseList(committedSearch: string, page: number) {
-  const month = useLedgerMonthParam();
+  const scope = useLedgerMonthScope();
   const q = committedSearch.trim();
   const safePage = Math.max(1, page);
 
   return useQuery({
-    queryKey: otherListQueryKey(month, q, safePage),
+    queryKey: otherListQueryKey(scope.scopeKey, q, safePage),
     queryFn: () =>
       fetchOtherExpenseList({
-        month,
+        ...toLedgerListApiScope(scope),
         ...(q ? { q } : {}),
         page: safePage,
         limit: PURCHASE_API_GROUPS_PAGE_SIZE,
@@ -227,6 +230,18 @@ export function usePatchPurchaseVendorGroup() {
   return useMutation({
     mutationFn: (body: PatchPurchaseVendorGroupBody) =>
       patchPurchaseVendorGroup(body),
+    onSuccess: () => invalidateAllPurchase(queryClient),
+    onError: async (e) => alert(getPurchaseErrorMessage(e)),
+  });
+}
+
+export function usePatchSupplyVendorGroup() {
+  const queryClient = useQueryClient();
+  const { alert } = useAppDialog();
+
+  return useMutation({
+    mutationFn: (body: PatchPurchaseVendorGroupBody) =>
+      patchSupplyVendorGroup(body),
     onSuccess: () => invalidateAllPurchase(queryClient),
     onError: async (e) => alert(getPurchaseErrorMessage(e)),
   });
@@ -366,4 +381,10 @@ export function linePayloadFromProductPurchase(
   line: Omit<ProductPurchaseLine, "id" | "stockReflected">,
 ) {
   return toProductPurchaseLinePayload(line);
+}
+
+export function linePayloadForBankUpdateFromProductPurchase(
+  line: Omit<ProductPurchaseLine, "id" | "stockReflected">,
+) {
+  return toProductPurchaseLinePayloadForBankUpdate(line);
 }

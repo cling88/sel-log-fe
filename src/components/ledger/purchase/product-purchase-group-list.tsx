@@ -43,6 +43,8 @@ interface ProductPurchaseGroupListProps {
   onBulkVendorStockReflect: (paymentDate: string, vendorId: string) => void;
   onToggleDateOrderCancel: (paymentDate: string) => void;
   onToggleVendorOrderCancel: (paymentDate: string, vendorId: string) => void;
+  groupActionsDisabled?: boolean;
+  stockActionsDisabled?: boolean;
 }
 
 function summarySaveKey(paymentDate: string, vendorId: string) {
@@ -64,6 +66,8 @@ export function ProductPurchaseGroupList({
   onBulkVendorStockReflect,
   onToggleDateOrderCancel,
   onToggleVendorOrderCancel,
+  groupActionsDisabled = false,
+  stockActionsDisabled = false,
 }: ProductPurchaseGroupListProps) {
   const { isExpanded, toggle } = usePurchaseGroupExpanded(
     "product",
@@ -82,6 +86,7 @@ export function ProductPurchaseGroupList({
         const pendingStock = allLines.filter((l) => !l.stockReflected).length;
         const hasPendingStock = pendingStock > 0;
         const dateCancelled = group.orderCancelled;
+        const singleVendorGroup = group.vendorGroups.length === 1;
 
         return (
           <div
@@ -248,6 +253,7 @@ export function ProductPurchaseGroupList({
                               totalExpense: vendorGroup.subtotal,
                             }}
                             groupDisabled={dateCancelled || vendorCancelled}
+                            stockActionsDisabled={stockActionsDisabled}
                             onReflectStock={onReflectStock}
                             onCancelStockReflect={onCancelStockReflect}
                             onLineClick={onLineClick}
@@ -275,39 +281,66 @@ export function ProductPurchaseGroupList({
                             />
                           </div>
 
-                          {!dateCancelled ? (
+                          {!dateCancelled &&
+                          (!singleVendorGroup ||
+                            (singleVendorGroup && vendorCancelled)) ? (
                             <div className="flex justify-end gap-1.5 pt-1">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                disabled={vendorPending === 0 || vendorCancelled}
-                                className="h-7 border-[var(--color-border)] bg-white text-xs"
-                                onClick={() =>
-                                  onBulkVendorStockReflect(
-                                    group.paymentDate,
-                                    vendorGroup.vendorId,
-                                  )
-                                }
-                              >
-                                재고반영
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="h-7 border-[var(--color-border)] bg-white text-xs"
-                                onClick={() =>
-                                  onToggleVendorOrderCancel(
-                                    group.paymentDate,
-                                    vendorGroup.vendorId,
-                                  )
-                                }
-                              >
-                                {vendorCancelled
-                                  ? "구매처 취소 해제"
-                                  : "구매처 주문취소"}
-                              </Button>
+                              {!singleVendorGroup ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={
+                                      groupActionsDisabled ||
+                                      vendorPending === 0 ||
+                                      vendorCancelled
+                                    }
+                                    className="h-7 border-[var(--color-border)] bg-white text-xs"
+                                    onClick={() =>
+                                      onBulkVendorStockReflect(
+                                        group.paymentDate,
+                                        vendorGroup.vendorId,
+                                      )
+                                    }
+                                  >
+                                    재고반영
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={groupActionsDisabled}
+                                    className="h-7 border-[var(--color-border)] bg-white text-xs"
+                                    onClick={() =>
+                                      onToggleVendorOrderCancel(
+                                        group.paymentDate,
+                                        vendorGroup.vendorId,
+                                      )
+                                    }
+                                  >
+                                    {vendorCancelled
+                                      ? "구매처 취소 해제"
+                                      : "구매처 주문취소"}
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={groupActionsDisabled}
+                                  className="h-7 border-[var(--color-border)] bg-white text-xs"
+                                  onClick={() =>
+                                    onToggleVendorOrderCancel(
+                                      group.paymentDate,
+                                      vendorGroup.vendorId,
+                                    )
+                                  }
+                                >
+                                  구매처 취소 해제
+                                </Button>
+                              )}
                             </div>
                           ) : null}
                         </div>
@@ -333,7 +366,7 @@ export function ProductPurchaseGroupList({
                         type="button"
                         variant="outline"
                         size="sm"
-                        disabled={pendingStock === 0}
+                        disabled={groupActionsDisabled || pendingStock === 0}
                         className="border-[var(--color-border)] bg-white"
                         onClick={() => onBulkStockReflect(group.paymentDate)}
                       >
@@ -343,6 +376,7 @@ export function ProductPurchaseGroupList({
                         type="button"
                         variant="outline"
                         size="sm"
+                        disabled={groupActionsDisabled}
                         className="border-[var(--color-border)] bg-white text-[var(--color-text-secondary)]"
                         onClick={() => onToggleDateOrderCancel(group.paymentDate)}
                       >

@@ -7,7 +7,12 @@ import type {
 } from "@/types/purchase-group";
 import type { OtherExpenseLine } from "@/types/purchase-other";
 import type { ProductPurchaseLine } from "@/types/purchase-product";
-import type { SupplyExpenseLine } from "@/types/purchase-supply";
+import {
+  SUPPLY_VENDOR_NONE_KEY,
+  type SupplyDateGroup,
+  type SupplyExpenseLine,
+  type SupplyVendorGroup,
+} from "@/types/purchase-supply";
 import type { InventoryProduct } from "@/types/inventory-product";
 import { purchaseBankIdForApi } from "@/lib/purchase-bank-display";
 import { normalizeProduct } from "@/lib/api/products";
@@ -23,6 +28,8 @@ export type PurchaseListMeta = {
 export type PurchaseListParams = {
   q?: string;
   month?: string;
+  /** `month` 생략 시 연도 전체 (`YYYY`) */
+  year?: string;
   page?: number;
   limit?: number;
 };
@@ -56,7 +63,8 @@ function buildListSearch(params?: PurchaseListParams): string {
   const search = new URLSearchParams();
   search.set("page", String(params?.page ?? DEFAULT_PAGE));
   search.set("limit", String(params?.limit ?? PURCHASE_API_GROUPS_PAGE_SIZE));
-  if (params?.month) search.set("month", params.month);
+  if (params?.year) search.set("year", params.year);
+  else if (params?.month) search.set("month", params.month);
   if (params?.q?.trim()) search.set("q", params.q.trim());
   return search.toString();
 }
@@ -403,10 +411,10 @@ export type ProductPurchaseLinePayload = {
   vendorId: string;
   quantity: number;
   paymentAmount: number;
-  orderNo?: string;
-  imageUrl?: string;
-  productLink?: string;
-  memo?: string;
+  orderNo?: string | null;
+  imageUrl?: string | null;
+  productLink?: string | null;
+  memo?: string | null;
   bankId?: string | null;
 };
 
@@ -445,6 +453,33 @@ export function toProductPurchaseLinePayload(
   };
 }
 
+/** 재고 반영 후 출금계좌 PATCH — FE-guide: 기존 필드값 유지 + nullable 명시 */
+export function toProductPurchaseLinePayloadForBankUpdate(
+  line: Omit<ProductPurchaseLine, "id" | "stockReflected">,
+): ProductPurchaseLinePayload {
+  const vendorId = line.vendorId?.trim();
+  if (!vendorId) {
+    throw new Error("구매처를 선택해 주세요.");
+  }
+  const orderNo = line.orderNo?.trim();
+  const imageUrl = line.imageUrl?.trim();
+  const productLink = line.productLink?.trim();
+  const memo = line.memo?.trim();
+
+  return {
+    paymentDate: line.paymentDate,
+    productName: line.productName.trim(),
+    vendorId,
+    quantity: Math.trunc(line.quantity),
+    paymentAmount: Math.trunc(line.paymentAmount),
+    orderNo: orderNo || null,
+    imageUrl: imageUrl && isHttpUrl(imageUrl) ? imageUrl : null,
+    productLink: productLink && isHttpUrl(productLink) ? productLink : null,
+    memo: memo || null,
+    bankId: purchaseBankIdForApi(line.bankId),
+  };
+}
+
 /** POST /purchase/products */
 export async function createProductPurchaseLine(
   body: ProductPurchaseLinePayload,
@@ -478,6 +513,8 @@ export async function deleteProductPurchaseLine(id: string): Promise<void> {
 export type StockReflectPayload = {
   productSku: string;
   qty: number;
+  /** true: 재고반영 시 products.currentPrice를 매입 단가로 덮어쓰지 않음 */
+  preserveProductPrice?: boolean;
 };
 
 export type StockReflectResult = {
@@ -498,6 +535,14 @@ function parseStockReflectResult(data: Record<string, unknown>): StockReflectRes
   };
 }
 
+function toStockReflectPayload(body: StockReflectPayload): Record<string, unknown> {
+  return {
+    productSku: body.productSku,
+    qty: body.qty,
+    ...(body.preserveProductPrice ? { preserveProductPrice: true } : {}),
+  };
+}
+
 /** POST /purchase/products/:id/stock-reflect */
 export async function reflectProductPurchaseStock(
   id: string,
@@ -505,7 +550,7 @@ export async function reflectProductPurchaseStock(
 ): Promise<StockReflectResult> {
   const res = await apiFetch<ApiEnvelope<Record<string, unknown>>>(
     `/purchase/products/${id}/stock-reflect`,
-    { method: "POST", body: JSON.stringify(body) },
+    { method: "POST", body: JSON.stringify(toStockReflectPayload(body)) },
   );
   return parseStockReflectResult(res.data ?? {});
 }
@@ -528,7 +573,8 @@ export type PatchPurchaseGroupBody = {
 
 export type PatchPurchaseVendorGroupBody = {
   paymentDate: string;
-  vendorId: string;
+  /** 구매처 없음 그룹은 `null` */
+  vendorId: string | null;
   extraFees?: { id?: string; label: string; amount: number }[];
   discounts?: { id?: string; label: string; amount: number }[];
 };
@@ -569,7 +615,7 @@ function normalizeVendorGroupFromPatch(
   return normalizeVendorPurchaseGroup(raw);
 }
 
-/** PATCH /purchase/groups/vendor — 구매처별 추가금·할인 */
+/** PATCH /purchase/groups/vendor — 상품매입 구매처별 추가금·할인 */
 export async function patchPurchaseVendorGroup(
   body: PatchPurchaseVendorGroupBody,
 ): Promise<VendorPurchaseGroup> {
@@ -598,31 +644,157 @@ export async function patchPurchaseVendorGroupCancel(
 
 // —— Supply ——
 
-export type SupplyGroupRow = {
-  paymentDate: string;
-  lines: SupplyExpenseLine[];
-};
+function normalizeSupplyVendorGroup(
+  raw: Record<string, unknown>,
+): SupplyVendorGroup {
+  const vendorId = normalizeVendorId(raw);
+  const vendorSnapshot =
+    normalizeVendorSummary(raw.vendorSnapshot) ??
+    (vendorId == null
+      ? { id: SUPPLY_VENDOR_NONE_KEY, name: "미지정", link: "" }
+      : null);
+  const lines = (Array.isArray(raw.lines) ? raw.lines : []).map((item) =>
+    normalizeSupplyLine((item ?? {}) as Record<string, unknown>),
+  );
+  const extraFees = normalizeAdjustments(raw.extraFees, "fee");
+  const discounts = normalizeAdjustments(raw.discounts, "disc");
+  const linesTotal = lines.reduce((sum, line) => sum + line.paymentAmount, 0);
+  const extraSum = extraFees.reduce((s, i) => s + Math.max(0, i.amount), 0);
+  const discSum = discounts.reduce((s, i) => s + Math.max(0, i.amount), 0);
+  const subtotalRaw = raw.subtotal;
+  const subtotal =
+    subtotalRaw !== undefined && subtotalRaw !== null && subtotalRaw !== ""
+      ? Number(subtotalRaw) || 0
+      : linesTotal + extraSum - discSum;
 
-export type SupplyListResult = {
-  groups: SupplyGroupRow[];
-  lines: SupplyExpenseLine[];
-  meta: PurchaseListMeta;
-};
+  return {
+    vendorId,
+    vendorSnapshot,
+    extraFees,
+    discounts,
+    orderCancelled: raw.orderCancelled === true,
+    subtotal,
+    lines,
+  };
+}
 
-function mapSupplyGroups(data: Record<string, unknown>[]): Omit<SupplyListResult, "meta"> {
-  const groups: SupplyGroupRow[] = [];
+function legacySupplyLinesToVendorGroups(
+  lines: SupplyExpenseLine[],
+  meta: Pick<PurchaseGroupMeta, "extraFees" | "discounts">,
+): SupplyVendorGroup[] {
+  if (lines.length === 0) return [];
+
+  const buckets = new Map<string, SupplyExpenseLine[]>();
+  for (const line of lines) {
+    const key = (line.vendorId ?? line.vendor.trim()) || "__none__";
+    const bucket = buckets.get(key) ?? [];
+    bucket.push(line);
+    buckets.set(key, bucket);
+  }
+
+  const vendorGroups: SupplyVendorGroup[] = [];
+  let first = true;
+  for (const [key, bucketLines] of buckets) {
+    const snapshot = bucketLines[0]?.vendorSnapshot ?? {
+      id: key === "__none__" ? "legacy-none" : key,
+      name: bucketLines[0]?.vendor.trim() || "미지정",
+      link: "",
+    };
+    const linesTotal = bucketLines.reduce((s, l) => s + l.paymentAmount, 0);
+    const extraFees = first ? meta.extraFees : [];
+    const discounts = first ? meta.discounts : [];
+    const extraSum = extraFees.reduce((s, i) => s + Math.max(0, i.amount), 0);
+    const discSum = discounts.reduce((s, i) => s + Math.max(0, i.amount), 0);
+    vendorGroups.push({
+      vendorId: key === "__none__" ? null : snapshot.id,
+      vendorSnapshot: key === "__none__" ? null : snapshot,
+      extraFees,
+      discounts,
+      orderCancelled: false,
+      subtotal: linesTotal + extraSum - discSum,
+      lines: bucketLines,
+    });
+    first = false;
+  }
+  return vendorGroups;
+}
+
+function buildSupplyTotalsFromVendorGroups(
+  vendorGroups: SupplyVendorGroup[],
+): PurchaseDateGroupTotals {
+  const linesTotal = vendorGroups.reduce(
+    (sum, vg) => sum + vg.lines.reduce((s, l) => s + l.paymentAmount, 0),
+    0,
+  );
+  const extraFeesTotal = vendorGroups.reduce(
+    (sum, vg) =>
+      sum + vg.extraFees.reduce((s, i) => s + Math.max(0, i.amount), 0),
+    0,
+  );
+  const discountsTotal = vendorGroups.reduce(
+    (sum, vg) =>
+      sum + vg.discounts.reduce((s, i) => s + Math.max(0, i.amount), 0),
+    0,
+  );
+  return {
+    linesTotal,
+    extraFeesTotal,
+    discountsTotal,
+    grandTotal: linesTotal + extraFeesTotal - discountsTotal,
+  };
+}
+
+function mapSupplyGroups(
+  data: Record<string, unknown>[],
+): Omit<SupplyListResult, "meta"> {
+  const groups: SupplyDateGroup[] = [];
   const lines: SupplyExpenseLine[] = [];
-  data.forEach((row) => {
+
+  data.forEach((row, index) => {
     const paymentDate = String(row.paymentDate ?? "");
+
+    if (Array.isArray(row.vendorGroups)) {
+      const vendorGroups = row.vendorGroups.map((item) =>
+        normalizeSupplyVendorGroup((item ?? {}) as Record<string, unknown>),
+      );
+      vendorGroups.forEach((vg) => lines.push(...vg.lines));
+      groups.push({
+        paymentDate,
+        groupName: normalizeOptionalString(row.groupName) || null,
+        orderCancelled: row.orderCancelled === true,
+        vendorGroups,
+        totals: normalizePurchaseDateGroupTotals(row.totals),
+      });
+      return;
+    }
+
     const rawLines = Array.isArray(row.lines) ? row.lines : [];
     const normalizedLines = rawLines.map((item) =>
       normalizeSupplyLine((item ?? {}) as Record<string, unknown>),
     );
-    groups.push({ paymentDate, lines: normalizedLines });
+    const meta = normalizeGroupMeta(
+      row.groupMeta as Record<string, unknown> | undefined,
+      index,
+    );
+    const vendorGroups = legacySupplyLinesToVendorGroups(normalizedLines, meta);
     lines.push(...normalizedLines);
+    groups.push({
+      paymentDate,
+      groupName: meta.groupName,
+      orderCancelled: meta.orderCancelled,
+      vendorGroups,
+      totals: buildSupplyTotalsFromVendorGroups(vendorGroups),
+    });
   });
+
   return { groups, lines };
 }
+
+export type SupplyListResult = {
+  groups: SupplyDateGroup[];
+  lines: SupplyExpenseLine[];
+  meta: PurchaseListMeta;
+};
 
 /** GET /purchase/supply */
 export async function fetchSupplyExpenseList(
@@ -726,6 +898,17 @@ export async function cancelSupplyStockReflect(
   };
 }
 
+/** PATCH /purchase/supply/groups/vendor — 부가 구매처별 추가금·할인 */
+export async function patchSupplyVendorGroup(
+  body: PatchPurchaseVendorGroupBody,
+): Promise<SupplyVendorGroup> {
+  const res = await apiFetch<ApiEnvelope<Record<string, unknown>>>(
+    "/purchase/supply/groups/vendor",
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+  return normalizeSupplyVendorGroup(res.data ?? {});
+}
+
 // —— Other ——
 
 export type OtherGroupRow = {
@@ -819,7 +1002,18 @@ export async function deleteOtherExpenseLine(id: string): Promise<void> {
 }
 
 export function getPurchaseErrorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.message;
+  if (error instanceof ApiError) {
+    if (error.code === "STOCK_REFLECTED") {
+      return (
+        error.message ||
+        "재고반영된 내역은 출금계좌만 수정할 수 있습니다."
+      );
+    }
+    if (error.code === "INVALID_QUERY") {
+      return error.message || "month와 year는 동시에 보낼 수 없습니다.";
+    }
+    return error.message;
+  }
   if (error instanceof Error) return error.message;
   return "요청에 실패했습니다.";
 }

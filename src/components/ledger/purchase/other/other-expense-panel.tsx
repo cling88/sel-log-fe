@@ -167,12 +167,13 @@ export function OtherExpensePanel() {
         }}
         defaultPaymentDate={dialogDate}
         editLine={editLine}
-        onSave={async (input: Omit<OtherExpenseLine, "id">) => {
+        onSave={async (input, options) => {
           await createLine.mutateAsync(input);
-          setDialogOpen(false);
-          await alert("등록되었습니다.");
+          if (options?.closeAfter !== false) {
+            setDialogOpen(false);
+          }
         }}
-        onUpdate={async (lineId, input: Omit<OtherExpenseLine, "id">) => {
+        onUpdate={async (lineId, input) => {
           await updateLine.mutateAsync({ id: lineId, line: input });
           setEditLineId(null);
           setDialogOpen(false);

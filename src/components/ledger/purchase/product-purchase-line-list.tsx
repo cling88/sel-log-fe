@@ -58,6 +58,7 @@ interface ProductPurchaseLineListProps {
   lines: ProductPurchaseLine[];
   pricing: ProductGroupPricing;
   groupDisabled?: boolean;
+  stockActionsDisabled?: boolean;
   onReflectStock: (lineId: string) => void;
   onCancelStockReflect: (lineId: string) => void;
   onLineClick: (lineId: string) => void;
@@ -66,12 +67,14 @@ interface ProductPurchaseLineListProps {
 function StockActions({
   line,
   disabled,
+  busy,
   onReflectStock,
   onCancelStockReflect,
   compact,
 }: {
   line: ProductPurchaseLine;
   disabled?: boolean;
+  busy?: boolean;
   onReflectStock: (lineId: string) => void;
   onCancelStockReflect: (lineId: string) => void;
   compact?: boolean;
@@ -95,10 +98,11 @@ function StockActions({
           type="button"
           variant="ghost"
           size="sm"
+          disabled={busy}
           className="h-6 px-1.5 text-[11px] font-semibold text-[var(--color-danger)] underline-offset-2 hover:bg-red-50 hover:text-red-700 hover:underline"
           onClick={() => onCancelStockReflect(line.id)}
         >
-          반영취소
+          {busy ? "처리 중…" : "반영취소"}
         </Button>
       </div>
     );
@@ -108,10 +112,11 @@ function StockActions({
     <Button
       type="button"
       size="sm"
+      disabled={busy}
       className={cn(purchasePrimaryActionClass, compact && "w-full")}
       onClick={() => onReflectStock(line.id)}
     >
-      재고반영
+      {busy ? "처리 중…" : "재고반영"}
     </Button>
   );
 }
@@ -267,6 +272,7 @@ function DesktopRow({
   pricing,
   marginRates,
   groupDisabled,
+  stockActionsDisabled,
   onReflectStock,
   onCancelStockReflect,
   onLineClick,
@@ -276,6 +282,7 @@ function DesktopRow({
   pricing: ProductGroupPricing;
   marginRates: MarginRateRange;
   groupDisabled?: boolean;
+  stockActionsDisabled?: boolean;
   onReflectStock: (lineId: string) => void;
   onCancelStockReflect: (lineId: string) => void;
   onLineClick: (lineId: string) => void;
@@ -448,6 +455,7 @@ function DesktopRow({
         <StockActions
           line={line}
           disabled={groupDisabled}
+          busy={stockActionsDisabled}
           onReflectStock={onReflectStock}
           onCancelStockReflect={onCancelStockReflect}
         />
@@ -488,6 +496,7 @@ function MobileCard({
   pricing,
   marginRates,
   groupDisabled,
+  stockActionsDisabled,
   onReflectStock,
   onCancelStockReflect,
   onLineClick,
@@ -497,6 +506,7 @@ function MobileCard({
   pricing: ProductGroupPricing;
   marginRates: MarginRateRange;
   groupDisabled?: boolean;
+  stockActionsDisabled?: boolean;
   onReflectStock: (lineId: string) => void;
   onCancelStockReflect: (lineId: string) => void;
   onLineClick: (lineId: string) => void;
@@ -594,6 +604,7 @@ function MobileCard({
             <StockActions
               line={line}
               disabled={groupDisabled}
+              busy={stockActionsDisabled}
               onReflectStock={onReflectStock}
               onCancelStockReflect={onCancelStockReflect}
               compact
@@ -609,6 +620,7 @@ export function ProductPurchaseLineList({
   lines,
   pricing,
   groupDisabled,
+  stockActionsDisabled,
   onReflectStock,
   onCancelStockReflect,
   onLineClick,
@@ -633,6 +645,7 @@ export function ProductPurchaseLineList({
                 pricing={pricing}
                 marginRates={marginRates}
                 groupDisabled={groupDisabled}
+                stockActionsDisabled={stockActionsDisabled}
                 onReflectStock={onReflectStock}
                 onCancelStockReflect={onCancelStockReflect}
                 onLineClick={onLineClick}

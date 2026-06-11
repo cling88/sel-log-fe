@@ -48,13 +48,15 @@ export interface LedgerStockReflectTarget {
 export interface StockReflectInfo {
   sku: string;
   qty: number;
+  /** 재고반영 모달에서 방금 등록한 SKU — BE가 currentPrice 덮어쓰지 않도록 */
+  preserveProductPrice?: boolean;
 }
 
 interface LedgerStockReflectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   target: LedgerStockReflectTarget | null;
-  onConfirm: (lineId: string, info: StockReflectInfo) => void;
+  onConfirm: (lineId: string, info: StockReflectInfo) => void | Promise<void>;
 }
 
 const STOCK_REFLECT_PICKER_QUERY_KEY = [
@@ -95,6 +97,10 @@ export function LedgerStockReflectDialog({
   const [productRegisterOpen, setProductRegisterOpen] = useState(false);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [categoryForRegister, setCategoryForRegister] = useState("");
+  const [quickRegisteredSku, setQuickRegisteredSku] = useState<string | null>(
+    null,
+  );
+  const [confirming, setConfirming] = useState(false);
 
   const { data: productPickerData, isLoading: productsLoading } = useQuery({
     queryKey: STOCK_REFLECT_PICKER_QUERY_KEY,
@@ -113,8 +119,8 @@ export function LedgerStockReflectDialog({
 
   const productPrefill = useMemo(() => {
     if (!target?.lineContext) return null;
-    return buildProductPrefillFromPurchaseLine(target.lineContext);
-  }, [target?.lineContext]);
+    return buildProductPrefillFromPurchaseLine(target.lineContext, marginRates);
+  }, [target?.lineContext, marginRates]);
 
   const recommendedPriceLabel = useMemo(() => {
     if (!target?.lineContext) return null;
@@ -133,6 +139,8 @@ export function LedgerStockReflectDialog({
     setProductRegisterOpen(false);
     setCategoryDialogOpen(false);
     setCategoryForRegister("");
+    setQuickRegisteredSku(null);
+    setConfirming(false);
   }, [open, target?.id, target?.quantity]);
 
   useEffect(() => {
@@ -160,10 +168,13 @@ export function LedgerStockReflectDialog({
 
   const selectedProduct = products.find((p) => p.sku === selectedSku);
 
-  const selectProductSku = (sku: string, name: string) => {
+  const selectProductSku = (sku: string, name: string, fromQuickRegister = false) => {
     setSelectedSku(sku);
     setSearch(`${sku} | ${name}`);
     setSkuSelectOpen(false);
+    if (!fromQuickRegister) {
+      setQuickRegisteredSku(null);
+    }
   };
 
   const openQuickProductRegister = () => {
@@ -175,7 +186,8 @@ export function LedgerStockReflectDialog({
   const handleQuickProductSave = async (input: InventoryProductInput) => {
     const created = await createProduct.mutateAsync(input);
     await queryClient.invalidateQueries({ queryKey: STOCK_REFLECT_PICKER_QUERY_KEY });
-    selectProductSku(created.sku, created.name);
+    selectProductSku(created.sku, created.name, true);
+    setQuickRegisteredSku(created.sku);
     setProductRegisterOpen(false);
     await alert("상품이 등록되었습니다. 반영할 SKU가 선택되었습니다.");
     return created;
@@ -207,7 +219,10 @@ export function LedgerStockReflectDialog({
                   onChange={(e) => {
                     setSearch(e.target.value);
                     setSkuSelectOpen(true);
-                    if (selectedSku) setSelectedSku(null);
+                    if (selectedSku) {
+                      setSelectedSku(null);
+                      setQuickRegisteredSku(null);
+                    }
                   }}
                   placeholder={
                     productsLoading
@@ -320,19 +335,38 @@ export function LedgerStockReflectDialog({
           </div>
 
           <DialogFooter className={MODAL_DIALOG_FOOTER_CLASS}>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={confirming}
+              onClick={() => onOpenChange(false)}
+            >
               취소
             </Button>
             <Button
               type="button"
-              disabled={!selectedSku}
+              disabled={!selectedSku || confirming}
               onClick={() => {
-                if (!selectedSku) return;
-                onConfirm(target.id, { sku: selectedSku, qty });
-                onOpenChange(false);
+                if (!selectedSku || confirming) return;
+                void (async () => {
+                  setConfirming(true);
+                  try {
+                    await Promise.resolve(
+                      onConfirm(target.id, {
+                        sku: selectedSku,
+                        qty,
+                        preserveProductPrice: quickRegisteredSku === selectedSku,
+                      }),
+                    );
+                  } finally {
+                    setConfirming(false);
+                  }
+                })();
               }}
             >
-              확정 ({formatAmount(qty)}개 반영)
+              {confirming
+                ? "반영 중…"
+                : `확정 (${formatAmount(qty)}개 반영)`}
             </Button>
           </DialogFooter>
         </DialogContent>

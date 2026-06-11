@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useLedgerMonthParam } from "@/hooks/use-ledger-month";
+import { useLedgerMonthScope } from "@/hooks/use-ledger-month";
 import { useAppDialog } from "@/components/common/app-dialog-provider";
 import { useLedgerUrlSearch } from "@/hooks/use-ledger-url-search";
 import {
@@ -9,6 +9,7 @@ import {
   useCancelSupplyStockReflect,
   useCreateSupplyExpenseLine,
   useDeleteSupplyExpenseLine,
+  usePatchSupplyVendorGroup,
   useReflectSupplyStock,
   useSupplyExpenseList,
   useUpdateSupplyExpenseLine,
@@ -29,6 +30,11 @@ import { SupplyExpenseGroupList } from "@/components/ledger/purchase/supply/supp
 import { SupplyExpenseRegisterDialog } from "@/components/ledger/purchase/supply/supply-expense-register-dialog";
 import { Button } from "@/components/ui/button";
 import { toSupplyLinePayload } from "@/lib/api/purchase";
+import { sanitizeAdjustments } from "@/types/purchase-group";
+import type { PurchaseGroupAdjustment } from "@/types/purchase-group";
+import type { SupplyExpenseLine } from "@/types/purchase-supply";
+import { supplyVendorGroupKey } from "@/types/purchase-supply";
+
 export function SupplyExpensePanel() {
   const { alert, confirm } = useAppDialog();
   const { search, committedSearch, setSearch, applySearch } = useLedgerUrlSearch({
@@ -41,11 +47,12 @@ export function SupplyExpensePanel() {
   const [stockReflectLineId, setStockReflectLineId] = useState<string | null>(
     null,
   );
-  const month = useLedgerMonthParam();
+  const [savingSummaryKey, setSavingSummaryKey] = useState<string | null>(null);
+  const { scopeKey: monthScope, month: scopedMonth } = useLedgerMonthScope();
 
   useEffect(() => {
     setPage(1);
-  }, [month, committedSearch]);
+  }, [monthScope, committedSearch]);
 
   const {
     data: listData,
@@ -60,6 +67,10 @@ export function SupplyExpensePanel() {
   const deleteLineMut = useDeleteSupplyExpenseLine();
   const reflectStock = useReflectSupplyStock();
   const cancelReflect = useCancelSupplyStockReflect();
+  const patchVendorGroup = usePatchSupplyVendorGroup();
+
+  const stockActionsDisabled =
+    reflectStock.isPending || cancelReflect.isPending;
 
   const groups = listData?.groups ?? [];
   const lines = listData?.lines ?? [];
@@ -146,6 +157,46 @@ export function SupplyExpensePanel() {
     await alert("재고 반영이 완료되었습니다.");
   };
 
+  const handleSave = async (
+    input: Omit<SupplyExpenseLine, "id" | "stockReflected">,
+    options?: { closeAfter?: boolean },
+  ) => {
+    await createLine.mutateAsync(toSupplyLinePayload(input));
+    await alert("등록되었습니다.");
+    if (options?.closeAfter !== false) {
+      setDialogOpen(false);
+    }
+  };
+
+  const handleSaveVendorSummary = async (
+    paymentDate: string,
+    vendorId: string | null,
+    patch: Pick<
+      { extraFees: PurchaseGroupAdjustment[]; discounts: PurchaseGroupAdjustment[] },
+      "extraFees" | "discounts"
+    >,
+  ) => {
+    const key = `${paymentDate}:${supplyVendorGroupKey(vendorId)}`;
+    setSavingSummaryKey(key);
+    try {
+      await patchVendorGroup.mutateAsync({
+        paymentDate,
+        vendorId: vendorId?.trim() || null,
+        extraFees: sanitizeAdjustments(patch.extraFees).map(
+          ({ id, label, amount }) => ({ id, label, amount }),
+        ),
+        discounts: sanitizeAdjustments(patch.discounts).map(
+          ({ id, label, amount }) => ({ id, label, amount }),
+        ),
+      });
+      await alert("추가금·할인금이 저장되었습니다.");
+    } finally {
+      setSavingSummaryKey(null);
+    }
+  };
+
+  const emptyPeriodLabel = scopedMonth == null ? "해당 연도" : "이번 달";
+
   const hasCommittedSearch = committedSearch.trim().length > 0;
   const showCatalogEmpty =
     !hasCommittedSearch && !isLoading && !isError && listTotal === 0;
@@ -195,18 +246,21 @@ export function SupplyExpensePanel() {
           <p className="py-12 text-center text-sm text-[var(--color-text-muted)]">
             {hasCommittedSearch
               ? "검색 결과가 없습니다."
-              : "이번 달 부가 비용 내역이 없습니다."}
+              : `${emptyPeriodLabel} 부가 비용 내역이 없습니다.`}
           </p>
         ) : (
           <>
             <div className={ledgerListBodyClass}>
               <SupplyExpenseGroupList
-                storageScopeKey={month}
+                storageScopeKey={monthScope}
                 groups={groups}
+                stockActionsDisabled={stockActionsDisabled}
                 onAddToGroup={(date) => openRegister(date)}
                 onReflectStock={setStockReflectLineId}
                 onCancelStockReflect={(id) => void handleCancelStockReflect(id)}
                 onLineClick={openLineDetail}
+                onSaveVendorSummary={handleSaveVendorSummary}
+                savingSummaryKey={savingSummaryKey}
               />
             </div>
             <div className={ledgerListFooterClass}>
@@ -229,11 +283,7 @@ export function SupplyExpensePanel() {
         }}
         defaultPaymentDate={dialogDate}
         editLine={editLine}
-        onSave={async (input) => {
-          await createLine.mutateAsync(toSupplyLinePayload(input));
-          setDialogOpen(false);
-          await alert("등록되었습니다.");
-        }}
+        onSave={handleSave}
         onUpdate={async (lineId, input) => {
           await updateLine.mutateAsync({ id: lineId, line: input });
           setEditLineId(null);
@@ -253,7 +303,7 @@ export function SupplyExpensePanel() {
           if (!open) setStockReflectLineId(null);
         }}
         target={stockReflectTarget}
-        onConfirm={(lineId, info) => void finishStockReflect(lineId, info)}
+        onConfirm={(lineId, info) => finishStockReflect(lineId, info)}
       />
     </>
   );

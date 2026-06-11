@@ -48,6 +48,11 @@ interface ProductPurchaseRegisterDialogProps {
     lineId: string,
     line: Omit<ProductPurchaseLine, "id" | "stockReflected">,
   ) => void | Promise<void>;
+  /** 재고 반영 후에도 출금계좌만 수정 */
+  onUpdateBankOnly?: (
+    lineId: string,
+    bankId: string | null,
+  ) => void | Promise<void>;
   onDelete?: () => void | Promise<void>;
   canDelete?: boolean;
   deleteDisabledReason?: string;
@@ -151,6 +156,7 @@ export function ProductPurchaseRegisterDialog({
   editLine,
   onSave,
   onUpdate,
+  onUpdateBankOnly,
   onDelete,
   canDelete = true,
   deleteDisabledReason,
@@ -167,8 +173,13 @@ export function ProductPurchaseRegisterDialog({
   const [previewUrl, setPreviewUrl] = useState("");
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [bankSubmitting, setBankSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initialBankId, setInitialBankId] = useState("");
   const formSessionRef = useRef<string | null>(null);
+
+  const bankDirty =
+    isEdit && resolveBankId(form.bankId) !== resolveBankId(initialBankId);
 
   const revokePreviewUrl = (url: string) => {
     if (url.startsWith("blob:")) URL.revokeObjectURL(url);
@@ -198,7 +209,9 @@ export function ProductPurchaseRegisterDialog({
     formSessionRef.current = sessionKey;
 
     if (editLine) {
-      setForm(lineToInput(editLine));
+      const input = lineToInput(editLine);
+      setForm(input);
+      setInitialBankId(input.bankId);
       setError(null);
       setImageModalOpen(false);
       setPreviewUrl((prev) => {
@@ -246,6 +259,19 @@ export function ProductPurchaseRegisterDialog({
       return;
     }
     await onDelete();
+  };
+
+  const handleBankOnlySave = async () => {
+    if (!isEdit || !editLine || !onUpdateBankOnly) return;
+    setBankSubmitting(true);
+    try {
+      await Promise.resolve(
+        onUpdateBankOnly(editLine.id, resolveBankId(form.bankId)),
+      );
+      setInitialBankId(form.bankId);
+    } finally {
+      setBankSubmitting(false);
+    }
   };
 
   const submit = async (closeAfter: boolean) => {
@@ -307,7 +333,7 @@ export function ProductPurchaseRegisterDialog({
           <DialogTitle>{isEdit ? "상품 매입 상세" : "상품 매입 등록"}</DialogTitle>
           <DialogDescription>
             {readOnly
-              ? "재고 반영된 내역은 조회만 가능합니다. 수정하려면 목록에서 반영을 취소해 주세요."
+              ? "재고 반영된 내역입니다. 상품·금액은 수정할 수 없고 출금계좌만 변경할 수 있습니다."
               : isEdit
                 ? "내역을 확인·수정하거나 삭제할 수 있습니다."
                 : "한 건씩 저장하면 같은 결제날짜끼리 목록에서 자동으로 묶여 보입니다."}
@@ -317,7 +343,8 @@ export function ProductPurchaseRegisterDialog({
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {readOnly ? (
             <p className="mb-4 rounded-lg border border-[var(--color-warning)]/40 bg-amber-50 px-3 py-2 text-sm text-[var(--color-text-secondary)]">
-              재고 반영 완료된 내역은 수정·삭제할 수 없습니다.
+              재고 반영 완료된 내역은 상품·금액 등은 수정할 수 없습니다. 출금계좌만
+              변경할 수 있습니다.
             </p>
           ) : null}
           {error ? (
@@ -347,7 +374,7 @@ export function ProductPurchaseRegisterDialog({
               className="sm:col-span-2"
               bankId={resolveBankId(form.bankId)}
               bankSnapshot={editLine?.bank}
-              disabled={readOnly}
+              disabled={!isEdit && readOnly}
               onBankIdChange={(id) =>
                 patch({ bankId: id ?? "" })
               }
@@ -465,7 +492,9 @@ export function ProductPurchaseRegisterDialog({
         <DialogFooter
           className={cn(
             REGISTER_MODAL_FOOTER_CLASS,
-            isEdit && onDelete && "sm:justify-between",
+            (isEdit && onDelete && !readOnly) || (readOnly && onUpdateBankOnly)
+              ? "sm:justify-between"
+              : undefined,
           )}
         >
           {isEdit && onDelete && !readOnly ? (
@@ -477,15 +506,32 @@ export function ProductPurchaseRegisterDialog({
             >
               삭제
             </Button>
+          ) : readOnly && onUpdateBankOnly && bankDirty ? (
+            <Button
+              type="button"
+              disabled={bankSubmitting}
+              onClick={() => void handleBankOnlySave()}
+            >
+              {bankSubmitting ? "저장 중…" : "출금계좌 저장"}
+            </Button>
           ) : (
             <span />
           )}
           <div className="flex flex-wrap justify-end gap-2">
-            <Button type="button" variant="outline" disabled={submitting} onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={submitting || bankSubmitting}
+              onClick={() => onOpenChange(false)}
+            >
               {readOnly ? "닫기" : "취소"}
             </Button>
             {!readOnly && isEdit ? (
-              <Button type="button" disabled={submitting} onClick={() => void submit(true)}>
+              <Button
+                type="button"
+                disabled={submitting}
+                onClick={() => void submit(true)}
+              >
                 {submitting ? "저장 중…" : "저장"}
               </Button>
             ) : !readOnly ? (

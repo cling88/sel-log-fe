@@ -224,11 +224,33 @@ export function DashboardPageContent() {
               <span>재고 변동 {data.today.stockDelta}개</span>
             </div>
             <p className="mt-3 border-t border-[var(--color-border)]/80 pt-3 text-sm tabular-nums text-[var(--color-text-secondary)]">
-              수익 {formatAmount(data.income.total)}원 − 누적 기타지출{" "}
-              {formatAmount(data.cumulative.otherExpenseTotal)}원 ={" "}
-              <span className="font-medium text-[var(--color-text-primary)]">
-                {formatAmount(data.cumulative.netTotal)}원
-              </span>
+              {(() => {
+                const cumulativeExpense = data.cumulative.cumulativeExpense;
+                const cumulativeOutflow =
+                  cumulativeExpense?.total ?? data.cumulative.otherExpenseTotal;
+                const usesFullPurchase = cumulativeExpense != null;
+                return (
+                  <>
+                    수익 {formatAmount(data.income.total)}원 −{" "}
+                    {usesFullPurchase ? "누적 매입·지출" : "누적 기타지출"}{" "}
+                    {formatAmount(cumulativeOutflow)}원 ={" "}
+                    <span className="font-medium text-[var(--color-text-primary)]">
+                      {formatAmount(data.cumulative.netTotal)}원
+                    </span>
+                    {cumulativeExpense ? (
+                      <span className="mt-1 block text-xs text-[var(--color-text-muted)]">
+                        상품 {formatAmount(cumulativeExpense.productTotal)} + 부가{" "}
+                        {formatAmount(cumulativeExpense.supplyTotal)} + 기타{" "}
+                        {formatAmount(cumulativeExpense.otherTotal)}
+                      </span>
+                    ) : (
+                      <span className="mt-1 block text-xs text-[var(--color-text-muted)]">
+                        BE `cumulativeExpense` 미제공 시 기타지출 탭 누적만 반영됩니다.
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
             </p>
           </div>
 

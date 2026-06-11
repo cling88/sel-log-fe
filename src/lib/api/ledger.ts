@@ -9,6 +9,13 @@ export type LedgerEarliestMonth = {
   month: string | null;
 };
 
+export type LedgerCumulativeExpense = {
+  productTotal: number;
+  supplyTotal: number;
+  otherTotal: number;
+  total: number;
+};
+
 export type LedgerSummary = {
   period: PeriodPreset;
   purchase: {
@@ -19,9 +26,56 @@ export type LedgerSummary = {
   };
   sale: { normalTotal: number; normalCount: number };
   income: { total: number; count: number };
+  /** 기타지출 탭 전체 누적 (period 무관) — 레거시 */
   otherExpense: { total: number };
+  /** 상품+부가+기타 전체 누적 (BE 권장) */
+  cumulativeExpense?: LedgerCumulativeExpense;
   netTotal: number;
 };
+
+function num(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeLedgerSummary(raw: Record<string, unknown>): LedgerSummary {
+  const purchase = (raw.purchase ?? {}) as Record<string, unknown>;
+  const sale = (raw.sale ?? {}) as Record<string, unknown>;
+  const income = (raw.income ?? {}) as Record<string, unknown>;
+  const otherExpense = (raw.otherExpense ?? {}) as Record<string, unknown>;
+  const cumulativeRaw = raw.cumulativeExpense as Record<string, unknown> | undefined;
+
+  const cumulativeExpense =
+    cumulativeRaw && typeof cumulativeRaw === "object"
+      ? {
+          productTotal: num(cumulativeRaw.productTotal),
+          supplyTotal: num(cumulativeRaw.supplyTotal),
+          otherTotal: num(cumulativeRaw.otherTotal),
+          total: num(cumulativeRaw.total),
+        }
+      : undefined;
+
+  return {
+    period: (raw.period as PeriodPreset) ?? "all",
+    purchase: {
+      productTotal: num(purchase.productTotal),
+      supplyTotal: num(purchase.supplyTotal),
+      total: num(purchase.total),
+      count: num(purchase.count),
+    },
+    sale: {
+      normalTotal: num(sale.normalTotal),
+      normalCount: num(sale.normalCount),
+    },
+    income: {
+      total: num(income.total),
+      count: num(income.count),
+    },
+    otherExpense: { total: num(otherExpense.total) },
+    ...(cumulativeExpense ? { cumulativeExpense } : {}),
+    netTotal: num(raw.netTotal),
+  };
+}
 
 export function getLedgerErrorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -34,10 +88,10 @@ export async function fetchLedgerSummary(
   period: PeriodPreset = "all",
 ): Promise<LedgerSummary> {
   const search = new URLSearchParams({ period });
-  const res = await apiFetch<ApiEnvelope<LedgerSummary>>(
+  const res = await apiFetch<ApiEnvelope<Record<string, unknown>>>(
     `/ledger/summary?${search}`,
   );
-  return res.data;
+  return normalizeLedgerSummary(res.data ?? {});
 }
 
 /** GET /api/v1/ledger/earliest-month */

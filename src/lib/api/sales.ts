@@ -22,6 +22,7 @@ export type SaleListMeta = {
 export type SaleListParams = {
   q?: string;
   month?: string;
+  year?: string;
   status?: SaleOrderStatus;
   page?: number;
   limit?: number;
@@ -58,7 +59,12 @@ const DEFAULT_PAGE = 1;
 export const SALES_API_PAGE_SIZE = 8;
 
 export function getSaleErrorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.message;
+  if (error instanceof ApiError) {
+    if (error.code === "INVALID_QUERY") {
+      return error.message || "month와 year는 동시에 보낼 수 없습니다.";
+    }
+    return error.message;
+  }
   if (error instanceof Error) return error.message;
   return "매출 요청에 실패했습니다.";
 }
@@ -221,7 +227,8 @@ function buildListSearch(params?: SaleListParams): string {
   const search = new URLSearchParams();
   search.set("page", String(params?.page ?? DEFAULT_PAGE));
   search.set("limit", String(params?.limit ?? SALES_API_PAGE_SIZE));
-  if (params?.month) search.set("month", params.month);
+  if (params?.year) search.set("year", params.year);
+  else if (params?.month) search.set("month", params.month);
   if (params?.q?.trim()) search.set("q", params.q.trim());
   if (params?.status) search.set("status", params.status);
   return search.toString();

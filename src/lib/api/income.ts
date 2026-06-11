@@ -14,6 +14,7 @@ export type IncomeListMeta = {
 export type IncomeListParams = {
   q?: string;
   month?: string;
+  year?: string;
   page?: number;
   limit?: number;
 };
@@ -45,7 +46,12 @@ const DEFAULT_PAGE = 1;
 export const INCOME_API_GROUPS_PAGE_SIZE = 5;
 
 export function getIncomeErrorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.message;
+  if (error instanceof ApiError) {
+    if (error.code === "INVALID_QUERY") {
+      return error.message || "month와 year는 동시에 보낼 수 없습니다.";
+    }
+    return error.message;
+  }
   if (error instanceof Error) return error.message;
   return "수익 요청에 실패했습니다.";
 }
@@ -133,7 +139,8 @@ function buildListSearch(params?: IncomeListParams): string {
   const search = new URLSearchParams();
   search.set("page", String(params?.page ?? DEFAULT_PAGE));
   search.set("limit", String(params?.limit ?? INCOME_API_GROUPS_PAGE_SIZE));
-  if (params?.month) search.set("month", params.month);
+  if (params?.year) search.set("year", params.year);
+  else if (params?.month) search.set("month", params.month);
   if (params?.q?.trim()) search.set("q", params.q.trim());
   return search.toString();
 }

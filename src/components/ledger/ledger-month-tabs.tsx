@@ -4,10 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LedgerMonthAddDialog } from "@/components/ledger/ledger-month-add-dialog";
 import { useLedgerEarliestMonth } from "@/hooks/use-ledger-earliest-month";
+import { getDefaultLedgerMonthParam } from "@/hooks/use-ledger-month";
 import {
   buildMonthTabs,
-  getTodayYearMonth,
-  parseYearMonth,
+  isLedgerMonthAllParam,
+  parseLedgerMonthFilter,
   resolveSelectedMonth,
   toEarliestMonthTab,
   toYearMonthParam,
@@ -28,7 +29,8 @@ export function LedgerMonthTabs({ tabId }: LedgerMonthTabsProps) {
   const searchParamsRef = useRef(searchParams);
   searchParamsRef.current = searchParams;
   const monthParam = searchParams.get("month");
-  const selected = parseYearMonth(monthParam) ?? getTodayYearMonth();
+  const scope = parseLedgerMonthFilter(monthParam);
+  const selectedValue = scope.scopeKey;
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLButtonElement>(null);
   const apiTab = toEarliestMonthTab(tabId);
@@ -37,21 +39,21 @@ export function LedgerMonthTabs({ tabId }: LedgerMonthTabsProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   const { data: earliestData, isLoading } = useLedgerEarliestMonth(
-    selected.year,
+    scope.year,
     apiTab,
   );
 
   useEffect(() => {
     setExtraMonths([]);
-  }, [selected.year, tabId]);
+  }, [scope.year, tabId]);
 
   const monthTabs = useMemo(
     () =>
-      buildMonthTabs(selected.year, {
+      buildMonthTabs(scope.year, {
         earliestYm: earliestData?.month ?? null,
         extraMonths,
       }),
-    [selected.year, earliestData?.month, extraMonths],
+    [scope.year, earliestData?.month, extraMonths],
   );
 
   const existingValues = useMemo(
@@ -59,23 +61,18 @@ export function LedgerMonthTabs({ tabId }: LedgerMonthTabsProps) {
     [monthTabs],
   );
 
-  const selectedValue = toYearMonthParam(selected.year, selected.month);
-
   useEffect(() => {
     if (monthParam) return;
-    const { year, month } = getTodayYearMonth();
     replaceLedgerQuery(router, pathname, searchParamsRef.current, (params) => {
-      params.set("month", toYearMonthParam(year, month));
+      params.set("month", getDefaultLedgerMonthParam());
     });
   }, [monthParam, pathname, router]);
 
   useEffect(() => {
     if (isLoading || !earliestData) return;
-    const resolved = resolveSelectedMonth(
-      selected.year,
-      selected.month,
-      monthTabs,
-    );
+    if (isLedgerMonthAllParam(monthParam)) return;
+    if (scope.month == null) return;
+    const resolved = resolveSelectedMonth(scope.year, scope.month, monthTabs);
     const nextValue = toYearMonthParam(resolved.year, resolved.month);
     if (nextValue === selectedValue) return;
     replaceLedgerQuery(router, pathname, searchParamsRef.current, (params) => {
@@ -83,8 +80,9 @@ export function LedgerMonthTabs({ tabId }: LedgerMonthTabsProps) {
     });
   }, [
     tabId,
-    selected.year,
-    selected.month,
+    monthParam,
+    scope.year,
+    scope.month,
     selectedValue,
     monthTabs,
     earliestData,
@@ -155,7 +153,7 @@ export function LedgerMonthTabs({ tabId }: LedgerMonthTabsProps) {
       <LedgerMonthAddDialog
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
-        year={selected.year}
+        year={scope.year}
         existingValues={existingValues}
         onAdd={handleAddMonth}
       />

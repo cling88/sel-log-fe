@@ -69,12 +69,17 @@ export function LedgerHeader() {
   } = useLedgerSummary(selectedPeriod);
 
   const purchaseTotal = summary?.purchase.total ?? 0;
+  const purchaseProductTotal = summary?.purchase.productTotal ?? 0;
+  const purchaseSupplyTotal = summary?.purchase.supplyTotal ?? 0;
   const purchaseCount = summary?.purchase.count ?? 0;
   const saleTotal = summary?.sale.normalTotal ?? 0;
   const saleCount = summary?.sale.normalCount ?? 0;
   const incomeTotal = summary?.income.total ?? 0;
   const incomeCount = summary?.income.count ?? 0;
-  const cumulativeOtherExpense = summary?.otherExpense.total ?? 0;
+  const cumulativeExpense = summary?.cumulativeExpense;
+  const cumulativeOutflow =
+    cumulativeExpense?.total ?? summary?.otherExpense.total ?? 0;
+  const cumulativeOutflowUsesFullPurchase = cumulativeExpense != null;
   const netTotal = summary?.netTotal ?? 0;
   const summaryPending = summaryLoading && !summary;
 
@@ -124,7 +129,7 @@ export function LedgerHeader() {
                 label: "매입",
                 subLabel: summaryPending
                   ? "—"
-                  : `상품+공급비 ${purchaseCount}건`,
+                  : `상품 ${formatAmount(purchaseProductTotal)} + 부가 ${formatAmount(purchaseSupplyTotal)} · ${purchaseCount}건`,
                 amount: formatSummaryAmount(purchaseTotal, summaryPending),
               },
               {
@@ -150,7 +155,7 @@ export function LedgerHeader() {
               </div>
             ))}
           </div>
-          <div className="mt-3 text-right text-sm text-white/80">
+          <div className="mt-3 space-y-1 text-right text-sm text-white/80">
             <p>
               수익 입금{" "}
               <span className="font-semibold text-white">
@@ -158,11 +163,26 @@ export function LedgerHeader() {
               </span>
             </p>
             <p>
-              - 누적 기타지출{" "}
+              -{" "}
+              {cumulativeOutflowUsesFullPurchase
+                ? "누적 매입·지출"
+                : "누적 기타지출(기타 탭)"}{" "}
               <span className="font-semibold text-white">
-                {formatSummaryAmount(cumulativeOtherExpense, summaryPending)}
+                {formatSummaryAmount(cumulativeOutflow, summaryPending)}
               </span>
             </p>
+            {cumulativeExpense && !summaryPending ? (
+              <p className="text-xs text-white/55">
+                상품 {formatAmount(cumulativeExpense.productTotal)} + 부가{" "}
+                {formatAmount(cumulativeExpense.supplyTotal)} + 기타{" "}
+                {formatAmount(cumulativeExpense.otherTotal)}
+              </p>
+            ) : !cumulativeOutflowUsesFullPurchase && !summaryPending ? (
+              <p className="text-xs text-white/55">
+                매입 카드는 선택 기간의 상품·부가만 포함합니다. 기타 탭 지출은
+                아래 누적 금액에만 반영됩니다.
+              </p>
+            ) : null}
             <p>
               = 총{" "}
               <span className="font-semibold text-white">

@@ -30,19 +30,26 @@ export function ProductPurchaseGroupEditDialog({
 }: ProductPurchaseGroupEditDialogProps) {
   const [date, setDate] = useState(paymentDate);
   const [name, setName] = useState(groupName);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setDate(paymentDate);
     setName(groupName);
+    setSubmitting(false);
   }, [open, paymentDate, groupName]);
 
   const submit = async () => {
     const trimmedDate = date.trim();
     const trimmedName = name.trim();
-    if (!trimmedDate || !trimmedName) return;
-    await onSave({ paymentDate: trimmedDate, groupName: trimmedName });
-    onOpenChange(false);
+    if (!trimmedDate || !trimmedName || submitting) return;
+    setSubmitting(true);
+    try {
+      await onSave({ paymentDate: trimmedDate, groupName: trimmedName });
+      onOpenChange(false);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -71,11 +78,16 @@ export function ProductPurchaseGroupEditDialog({
           </div>
         </div>
         <DialogFooter className={REGISTER_MODAL_FOOTER_CLASS}>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={submitting}
+            onClick={() => onOpenChange(false)}
+          >
             취소
           </Button>
-          <Button type="button" onClick={() => void submit()}>
-            저장
+          <Button type="button" disabled={submitting} onClick={() => void submit()}>
+            {submitting ? "저장 중…" : "저장"}
           </Button>
         </DialogFooter>
       </DialogContent>

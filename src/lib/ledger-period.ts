@@ -3,6 +3,62 @@ import type { LedgerTabId } from "@/types/common";
 
 export type MonthTab = { value: string; month: number; label: string };
 
+/** URL `month=2026-all` — 선택 연도 전체 */
+export const LEDGER_MONTH_ALL_SUFFIX = "-all";
+
+export type LedgerListScope = {
+  /** URL·쿼리키용 (`2026-06` | `2026-all`) */
+  scopeKey: string;
+  year: number;
+  /** null이면 해당 연도 전체 */
+  month: number | null;
+};
+
+export function toLedgerMonthAllParam(year: number) {
+  return `${year}${LEDGER_MONTH_ALL_SUFFIX}`;
+}
+
+export function isLedgerMonthAllParam(value: string | null | undefined): boolean {
+  return !!value && value.endsWith(LEDGER_MONTH_ALL_SUFFIX);
+}
+
+export function parseLedgerMonthAllYear(value: string): number | null {
+  if (!isLedgerMonthAllParam(value)) return null;
+  const year = Number(value.slice(0, 4));
+  return Number.isFinite(year) && year >= 2000 && year <= 2100 ? year : null;
+}
+
+export function parseLedgerMonthFilter(
+  monthParam: string | null,
+): LedgerListScope {
+  if (monthParam && isLedgerMonthAllParam(monthParam)) {
+    const year = parseLedgerMonthAllYear(monthParam);
+    if (year != null) {
+      return { scopeKey: monthParam, year, month: null };
+    }
+  }
+  const parsed = parseYearMonth(monthParam);
+  if (parsed) {
+    return {
+      scopeKey: toYearMonthParam(parsed.year, parsed.month),
+      year: parsed.year,
+      month: parsed.month,
+    };
+  }
+  const { year, month } = getTodayYearMonth();
+  return { scopeKey: toYearMonthParam(year, month), year, month };
+}
+
+/** 목록 API — `month=YYYY-MM` 또는 연도 전체 시 `year=YYYY` */
+export function toLedgerListApiScope(
+  scope: LedgerListScope,
+): { month?: string; year?: string } {
+  if (scope.month == null) {
+    return { year: String(scope.year) };
+  }
+  return { month: scope.scopeKey };
+}
+
 export type MonthTabRangeOptions = {
   earliestYm: string | null;
   extraMonths?: string[];
@@ -78,12 +134,17 @@ export function buildMonthTabs(
     values.add(toYearMonthParam(currentYear, currentMonth));
   }
 
-  return Array.from(values)
+  const monthTabs = Array.from(values)
     .sort(compareYearMonth)
     .map((value) => {
       const parsed = parseYearMonth(value)!;
       return { value, month: parsed.month, label: `${parsed.month}월` };
     });
+
+  return [
+    { value: toLedgerMonthAllParam(year), month: 0, label: "전체" },
+    ...monthTabs,
+  ];
 }
 
 /** 상품 이력 등 레거시 — 고정 시작 월 기준 */
