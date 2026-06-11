@@ -170,6 +170,13 @@ function StockAdjustDialog({
   const [qty, setQty] = useState(1);
   const [reason, setReason] = useState("");
 
+  useEffect(() => {
+    if (!open) return;
+    setAction("increase");
+    setQty(1);
+    setReason("");
+  }, [open, product?.id]);
+
   if (!product) return null;
 
   const delta = action === "increase" ? qty : -qty;
@@ -463,9 +470,10 @@ export function ProductsTabPanel() {
 
   const filtered = visibleProducts;
 
-  /** 탭·검색·페이지 변경 후 목록 첫 상품 자동 선택 */
+  /** 탭·검색·페이지 변경 후 — 선택 상품이 없거나 목록에 없을 때만 첫 상품 선택 */
   useEffect(() => {
     if (productsLoading || productsLoadError || showCatalogEmpty) return;
+    if (selectedId && visibleProducts.some((p) => p.id === selectedId)) return;
     const first = visibleProducts[0];
     setSelectedId(first?.id ?? null);
   }, [
@@ -476,6 +484,7 @@ export function ProductsTabPanel() {
     productsLoadError,
     showCatalogEmpty,
     visibleProducts,
+    selectedId,
   ]);
 
   useEffect(() => {
@@ -583,10 +592,12 @@ export function ProductsTabPanel() {
     const quantity = Math.abs(args.delta);
     const action = args.delta >= 0 ? "increase" : "decrease";
 
-    return adjustStockMutation.mutateAsync({
+    const updated = await adjustStockMutation.mutateAsync({
       id: target.id,
       body: { action, quantity, reason: args.reason },
     });
+    setSelectedId(updated.id);
+    return updated;
   };
 
   const renderListBody = () => {
